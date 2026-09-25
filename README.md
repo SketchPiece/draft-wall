@@ -7,4 +7,4 @@ Design canvases: a folder of HTML boards plus `canvas.json` (the Claude Desktop 
 - `bin/canvas.mjs`: CLI: `sync`, `serve`, `push`, `pull`, `list`, `rm`, `config`.
 - Env on Vercel: `CANVAS_PASSWORD`, `CANVAS_TOKEN`, `CANVAS_SECRET`, plus the Blob store connection.
 
-Agent workflow lives in the `canvas` skill (`~/.claude/skills/canvas/SKILL.md`).
+Agents use the CLI through a Claude Code skill that carries a copy of `bin/canvas.mjs`, `src/shared.js` and `web/viewer.html`.

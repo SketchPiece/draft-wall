@@ -13,7 +13,7 @@
     "local": "node bin/canvas.mjs serve"
   },
   "engines": {
-    "node": ">=20"
+    "node": "24.x"
   },
   "dependencies": {
     "@vercel/blob": "^2.8.0",

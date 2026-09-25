@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex">
-<title>Canvas</title>
+<title>Draftwall</title>
 <style>
 :root { --bg: #0a0a0a; --panel: #111111; --field: #0a0a0a; --line: rgba(255,255,255,.1); --text: #ececec; --muted: #8e8e8e; --accent: #346bf1; --danger: #ff6369;
   --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif; color-scheme: dark; }
@@ -20,16 +20,22 @@ input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-col
 button { height: 40px; border: 0; border-radius: 9px; background: var(--accent); color: #fff; font: 500 14px var(--font); cursor: pointer; }
 button:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 .error { min-height: 1em; margin: 0; color: var(--danger); font-size: 13px; }
+.description { margin: 0; color: var(--muted); }
+nav { font-size: 12px; text-align: center; color: var(--muted); }
+a { color: var(--muted); }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 </style>
 </head>
 <body>
 <form method="post" action="/login">
-  <h1>Canvas</h1>
+  <h1>Draftwall</h1>
+  <p class="description">Store and explore visual boards, files, and notes on a zoomable canvas.</p>
   <label for="password">Password</label>
   <input id="password" name="password" type="password" autocomplete="current-password" autofocus required>
   <input type="hidden" name="next" value="{{next}}">
   <p class="error" role="alert">{{error}}</p>
   <button type="submit">Sign in</button>
+  <nav aria-label="Legal"><a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms of Service</a></nav>
 </form>
 </body>
 </html>

@@ -16,6 +16,8 @@ const loginRedirect = (c: Context) => c.redirect(`/login?next=${encodeURICompone
 const safeNext = (next: string | undefined) => (next && /^\/(?!\/)/.test(next) ? next : '/');
 
 // ---- pages ----
+app.get('/privacy', c => html(c, pages.privacy));
+app.get('/terms', c => html(c, pages.terms));
 app.get('/login', c => html(c, pages.login.replace('{{error}}', '').replace('{{next}}', escapeAttr(safeNext(c.req.query('next'))))));
 app.post('/login', async c => {
   const form = await c.req.parseBody();

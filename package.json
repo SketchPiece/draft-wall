@@ -1,0 +1,26 @@
+{
+  "name": "canvas",
+  "private": true,
+  "type": "module",
+  "description": "Design canvases: HTML boards on a zoomable board, local and on Vercel",
+  "bin": {
+    "canvas": "bin/canvas.mjs"
+  },
+  "scripts": {
+    "build": "node scripts/embed.mjs",
+    "embed": "node scripts/embed.mjs",
+    "typecheck": "node scripts/embed.mjs && tsc --noEmit",
+    "local": "node bin/canvas.mjs serve"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@vercel/blob": "^2.8.0",
+    "hono": "^4.13.9"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "typescript": "^7.0.2"
+  }
+}

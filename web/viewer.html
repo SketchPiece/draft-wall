@@ -1,0 +1,663 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Canvas</title>
+<style>
+/* Canvas viewer. Look follows T3 Code: near-black ground, quiet panels, one blue accent. */
+:root {
+  --bg: #0a0a0a; --panel: #111111; --panel-2: #161616; --hover: #1f1f1f; --pressed: #262626;
+  --line: rgba(255,255,255,.08); --line-2: rgba(255,255,255,.14);
+  --text: #ececec; --muted: #8e8e8e; --faint: #5a5a5a;
+  --accent: #346bf1; --danger: #e5484d;
+  --dot: rgba(255,255,255,.075);
+  --board-edge: rgba(255,255,255,.07); --board-shadow: 0 10px 40px rgba(0,0,0,.55); --chrome-shadow: 0 4px 16px rgba(0,0,0,.3);
+  --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  --top: env(safe-area-inset-top, 0px); --bottom: env(safe-area-inset-bottom, 0px);
+  color-scheme: dark;
+}
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg: #f3f3f4; --panel: #ffffff; --panel-2: #fafafa; --hover: #f0f0f1; --pressed: #e7e7e9;
+    --line: rgba(0,0,0,.08); --line-2: rgba(0,0,0,.15);
+    --text: #18181b; --muted: #6b6b73; --faint: #a3a3ab;
+    --accent: #2f63e6; --danger: #d93036;
+    --dot: rgba(0,0,0,.1);
+    --board-edge: rgba(0,0,0,.08); --board-shadow: 0 6px 28px rgba(0,0,0,.09); --chrome-shadow: 0 4px 16px rgba(0,0,0,.08);
+    color-scheme: light;
+  }
+}
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--text); font: 13px/1.4 var(--font); overflow: hidden; -webkit-font-smoothing: antialiased;
+  user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+[hidden] { display: none !important; }
+button { font: inherit; color: inherit; background: none; border: 0; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+svg { display: block; flex: none; }
+
+#stage { position: fixed; inset: 0; overflow: hidden; touch-action: none;
+  background-image: radial-gradient(circle, var(--dot) 1px, transparent 1.3px); }
+#stage.hand { cursor: grab; }
+#stage.sticky { cursor: crosshair; }
+#stage.grabbing, #stage.grabbing * { cursor: grabbing !important; }
+#world { position: absolute; left: 0; top: 0; transform-origin: 0 0; --z: 1; }
+
+.board { position: absolute; }
+.board .sheet { position: absolute; inset: 0; overflow: hidden; background: #fff; border-radius: 2px;
+  box-shadow: 0 0 0 calc(1px / var(--z)) var(--board-edge), var(--board-shadow); }
+.board iframe { display: block; width: 100%; height: 100%; border: 0; pointer-events: none; background: #fff; }
+.board .hit { position: absolute; inset: 0; }
+.board.selected .sheet { box-shadow: 0 0 0 calc(2px / var(--z)) var(--accent), var(--board-shadow); }
+
+.label { position: absolute; left: 0; right: 0; bottom: 100%; display: flex; align-items: center;
+  gap: calc(4px / var(--z)); padding-bottom: calc(8px / var(--z)); font-size: calc(13px / var(--z));
+  color: var(--muted); white-space: nowrap; }
+.label .name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.board.selected .label, .board:hover .label { color: var(--text); }
+.label button, .label a { display: grid; place-items: center; width: calc(22px / var(--z)); height: calc(22px / var(--z));
+  border-radius: calc(6px / var(--z)); color: var(--muted); opacity: 0; transition: opacity .12s; }
+.label svg { width: calc(14px / var(--z)); height: calc(14px / var(--z)); }
+.board:hover .label button, .board:hover .label a, .board.selected .label button, .board.selected .label a { opacity: 1; }
+.label button:hover, .label a:hover { background: var(--hover); color: var(--text); }
+
+.note { position: absolute; width: max-content; color: var(--text); white-space: pre-wrap; text-wrap: balance; letter-spacing: -.015em; }
+.note.title1 { font-size: 72px; line-height: 1.1; font-weight: 700; }
+.note.title2 { font-size: 44px; line-height: 1.15; font-weight: 650; }
+.note.text { font-size: 24px; line-height: 1.45; font-weight: 400; color: var(--muted); letter-spacing: 0; }
+
+/* Sticky notes (canvas.json "annotations"). Paper colors stay the same in both themes. */
+.ann { position: absolute; min-height: 120px; padding: 18px 20px 22px; border-radius: 3px; color: #1d1b16;
+  font: 22px/1.4 var(--font); white-space: pre-wrap; overflow-wrap: anywhere; background: #f6de7b;
+  box-shadow: 0 1px 0 rgba(0,0,0,.06), 0 calc(6px / var(--z)) calc(18px / var(--z)) rgba(0,0,0,.28); }
+.ann[data-color="green"] { background: #bfe6b4; }
+.ann[data-color="blue"] { background: #bcd6fb; }
+.ann[data-color="pink"] { background: #f7c4d8; }
+.ann[data-color="gray"] { background: #e4e4e2; }
+.ann.bold { font-weight: 650; }
+.ann.italic { font-style: italic; }
+.ann.selected { outline: calc(2px / var(--z)) solid var(--accent); outline-offset: calc(3px / var(--z)); }
+.ann .empty { color: rgba(29,27,22,.45); }
+.ann textarea { display: block; width: 100%; min-height: 80px; margin: 0; padding: 0; border: 0; outline: 0; resize: none; overflow: hidden;
+  background: transparent; color: inherit; font: inherit; line-height: inherit; user-select: text; -webkit-user-select: text; }
+
+/* Floating chrome */
+.bar { position: fixed; z-index: 5; display: flex; align-items: center; gap: 2px; height: 36px; padding: 0 4px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--chrome-shadow); }
+#bar-left { left: 12px; top: calc(12px + var(--top)); max-width: calc(100vw - 196px); }
+#bar-right { right: 12px; top: calc(12px + var(--top)); }
+#tools { left: 50%; bottom: calc(14px + var(--bottom)); transform: translateX(-50%); height: 44px; padding: 0 5px; gap: 3px; }
+.ibtn { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 7px; color: var(--muted); }
+#tools .ibtn { width: 34px; height: 34px; border-radius: 8px; }
+.ibtn:hover { background: var(--hover); color: var(--text); }
+.ibtn[aria-pressed="true"] { background: var(--pressed); color: var(--text); }
+#tools .ibtn[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.ibtn svg { width: 16px; height: 16px; }
+#tools svg { width: 18px; height: 18px; }
+#home { color: var(--muted); }
+#title { padding: 0 8px 0 4px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+#count { padding-right: 8px; color: var(--faint); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sep { width: 1px; height: 18px; background: var(--line); margin: 0 4px; flex: none; }
+.zoom { min-width: 50px; height: 28px; padding: 0 6px; border-radius: 7px; color: var(--text); font-variant-numeric: tabular-nums; }
+.zoom:hover { background: var(--hover); }
+@media (max-width: 520px) { #count, #bar-right .sep, #fit { display: none; } #bar-left { max-width: calc(100vw - 150px); } }
+
+#panel { position: fixed; z-index: 4; left: 12px; top: calc(56px + var(--top)); width: 240px; max-height: calc(100% - 140px); overflow: auto;
+  padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--chrome-shadow); }
+#panel h2 { margin: 4px 8px 6px; font-size: 11px; font-weight: 500; color: var(--faint); }
+#panel ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+#panel li button { display: flex; width: 100%; align-items: center; gap: 8px; height: 30px; padding: 0 8px; border-radius: 7px; color: var(--muted); text-align: left; }
+#panel li button:hover { background: var(--hover); color: var(--text); }
+#panel li button[aria-current="true"] { background: var(--pressed); color: var(--text); }
+#panel li .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#panel li .s { color: var(--faint); font: 11px var(--mono); }
+
+#ann-bar { position: fixed; z-index: 6; height: 36px; gap: 4px; }
+#ann-bar .dot { width: 20px; height: 20px; margin: 0 2px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
+#ann-bar .dot[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
+#ann-bar .del:hover { color: var(--danger); }
+
+#empty { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; text-align: center; line-height: 1.6; }
+#toast { position: fixed; left: 50%; bottom: calc(72px + var(--bottom)); transform: translateX(-50%); z-index: 9; max-width: calc(100vw - 32px); padding: 8px 12px;
+  background: var(--panel); border: 1px solid var(--line-2); border-radius: 9px; color: var(--text); box-shadow: var(--chrome-shadow); }
+
+/* Full-size view of one board, interactive */
+#focus { position: fixed; inset: 0; z-index: 8; display: flex; flex-direction: column; background: var(--bg); }
+#focus header { display: flex; align-items: center; gap: 2px; min-height: 52px; padding: var(--top) 10px 0; border-bottom: 1px solid var(--line); }
+#focus-back { display: flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px 0 6px; border-radius: 8px; color: var(--text); font-weight: 500; }
+#focus-back:hover { background: var(--hover); }
+#focus-back svg { width: 16px; height: 16px; }
+#focus-title { flex: 1; min-width: 0; padding: 0 8px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#focus-pos { color: var(--faint); font-variant-numeric: tabular-nums; padding: 0 6px; }
+#focus-body { position: relative; flex: 1; overflow: auto; display: flex; }
+#focus-sizer { position: relative; flex: none; margin: auto; }
+#focus-frame { position: absolute; left: 24px; top: 24px; transform-origin: 0 0; background: #fff; box-shadow: 0 0 0 1px var(--board-edge), var(--board-shadow); }
+#focus-frame iframe { display: block; width: 100%; height: 100%; border: 0; }
+@media (max-width: 520px) { #focus-title, #focus-open, #focus .sep { display: none; } #focus header { justify-content: space-between; } }
+
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<div id="stage"><div id="world"></div></div>
+
+<div class="bar" id="bar-left">
+  <a class="ibtn" id="home" href="/" title="All canvases" aria-label="All canvases">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/></svg>
+  </a>
+  <button class="ibtn" id="panel-btn" aria-pressed="false" title="Boards (B)" aria-label="Boards">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2.5" width="12" height="11" rx="2"/><path d="M6 2.5v11"/></svg>
+  </button>
+  <span id="title">Canvas</span>
+  <span id="count"></span>
+</div>
+
+<div class="bar" id="bar-right">
+  <button class="ibtn" id="zoom-out" title="Zoom out (−)" aria-label="Zoom out">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3.5 8h9"/></svg>
+  </button>
+  <button class="zoom" id="zoom" title="Fit all (⇧1)">100%</button>
+  <button class="ibtn" id="zoom-in" title="Zoom in (+)" aria-label="Zoom in">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3.5 8h9M8 3.5v9"/></svg>
+  </button>
+  <span class="sep"></span>
+  <button class="ibtn" id="fit" title="Fit all (⇧1)" aria-label="Fit all">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M2.5 6V3.5a1 1 0 0 1 1-1H6M10 2.5h2.5a1 1 0 0 1 1 1V6M13.5 10v2.5a1 1 0 0 1-1 1H10M6 13.5H3.5a1 1 0 0 1-1-1V10"/></svg>
+  </button>
+</div>
+
+<div class="bar" id="tools" role="toolbar" aria-label="Tools">
+  <button class="ibtn" data-tool="select" aria-pressed="true" title="Select (V)" aria-label="Select">
+    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M4 2.8 14.2 9l-4.6 1.1-2.2 4.4L4 2.8Z"/></svg>
+  </button>
+  <button class="ibtn" data-tool="hand" aria-pressed="false" title="Hand (H)" aria-label="Hand">
+    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V4.2a1.2 1.2 0 0 1 2.4 0V8.5M8.4 8V3.2a1.2 1.2 0 0 1 2.4 0V8M10.8 8.2V4.4a1.2 1.2 0 0 1 2.4 0v5.8c0 3-1.9 5.3-4.8 5.3-2 0-3.1-.9-4.2-2.6L2.6 10a1.1 1.1 0 0 1 1.8-1.3L6 10.6"/></svg>
+  </button>
+  <span class="sep"></span>
+  <button class="ibtn" data-tool="sticky" aria-pressed="false" title="Sticky note (S)" aria-label="Sticky note">
+    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M3 3.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 .5.5V11l-4 4H3.5a.5.5 0 0 1-.5-.5v-11Z"/><path d="M15 11h-3.5a.5.5 0 0 0-.5.5V15"/></svg>
+  </button>
+</div>
+
+<div class="bar" id="ann-bar" hidden>
+  <button class="dot" data-color="" style="background:#f6de7b" aria-label="Yellow"></button>
+  <button class="dot" data-color="green" style="background:#bfe6b4" aria-label="Green"></button>
+  <button class="dot" data-color="blue" style="background:#bcd6fb" aria-label="Blue"></button>
+  <button class="dot" data-color="pink" style="background:#f7c4d8" aria-label="Pink"></button>
+  <button class="dot" data-color="gray" style="background:#e4e4e2" aria-label="Gray"></button>
+  <span class="sep"></span>
+  <button class="ibtn del" id="ann-del" title="Delete (⌫)" aria-label="Delete note">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M3 4.5h10M6.5 4.5V3h3v1.5M4.5 4.5l.6 8.5h5.8l.6-8.5"/></svg>
+  </button>
+</div>
+
+<nav id="panel" hidden aria-label="Boards">
+  <h2>Boards</h2>
+  <ol id="panel-list"></ol>
+</nav>
+
+<div id="empty" hidden></div>
+<div id="toast" hidden role="status"></div>
+
+<section id="focus" hidden aria-modal="true" role="dialog" aria-labelledby="focus-title">
+  <header>
+    <button id="focus-back" title="Back to canvas (Esc)">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 3.5 5.5 8l4.5 4.5"/></svg>Canvas
+    </button>
+    <span id="focus-title"></span>
+    <button class="ibtn" id="focus-prev" title="Previous board (←)" aria-label="Previous board">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 12.5V3.5M4 7.5l4-4 4 4"/></svg>
+    </button>
+    <span id="focus-pos"></span>
+    <button class="ibtn" id="focus-next" title="Next board (→)" aria-label="Next board">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 3.5v9M4 8.5l4 4 4-4"/></svg>
+    </button>
+    <span class="sep"></span>
+    <button class="ibtn" id="focus-out" title="Zoom out (−)" aria-label="Zoom out">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3.5 8h9"/></svg>
+    </button>
+    <button class="zoom" id="focus-zoom" title="Fit to window / 100%">100%</button>
+    <button class="ibtn" id="focus-in" title="Zoom in (+)" aria-label="Zoom in">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3.5 8h9M8 3.5v9"/></svg>
+    </button>
+    <span class="sep"></span>
+    <a class="ibtn" id="focus-open" target="_blank" rel="noopener" title="Open in new tab" aria-label="Open in new tab">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M6.5 3.5h-3v9h9v-3"/></svg>
+    </a>
+  </header>
+  <div id="focus-body"><div id="focus-sizer"><div id="focus-frame"><iframe id="focus-iframe" title="Board" sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals"></iframe></div></div></div>
+</section>
+
+<script>
+(() => {
+  const $ = s => document.querySelector(s);
+  const stage = $('#stage'), world = $('#world');
+  const Z_MIN = 0.03, Z_MAX = 4, PAD = 64;
+  const SANDBOX = 'allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals';
+  const ICON_EXPAND = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M9.5 2.5h4v4M13.5 2.5 9 7M6.5 13.5h-4v-4M2.5 13.5 7 9"/></svg>';
+  const ICON_OPEN = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M9 2.5h4.5V7M13.5 2.5 7.5 8.5M6.5 3.5h-3v9h9v-3"/></svg>';
+
+  const id = decodeURIComponent((location.pathname.match(/^\/c\/([^/]+)/) || [])[1] || 'local');
+  const API = '/api/canvases/' + encodeURIComponent(id);
+
+  let data = null, doc = null;
+  let view = { x: 0, y: 0, z: 1 }, sel = null, tool = 'select', space = false;
+  let focusFile = null, focusFit = true, focusZoom = 1;
+  let editing = null, saving = false, saveTimer = null, busy = false;
+  const boardEls = new Map();
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const store = {
+    get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+  };
+  const viewKey = 'canvas-view:' + id;
+  const files = () => doc ? doc.order.filter(f => doc.boards[f]) : [];
+  const fileUrl = f => data.fileBase + f.split('/').map(encodeURIComponent).join('/') + '?v=' + encodeURIComponent(data.files?.[f] ?? '0');
+  const ann = aid => doc.annotations.find(a => a.id === aid);
+  const topInset = () => parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--top')) || 0;
+
+  // ---------- view ----------
+  function apply() {
+    world.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.z})`;
+    world.style.setProperty('--z', view.z);
+    let g = 24 * view.z; while (g < 12) g *= 4;
+    stage.style.backgroundSize = `${g}px ${g}px`;
+    stage.style.backgroundPosition = `${view.x}px ${view.y}px`;
+    $('#zoom').textContent = Math.round(view.z * 100) + '%';
+    placeAnnBar();
+    store.set(viewKey, view);
+  }
+  function zoomAt(z, cx, cy) {
+    const nz = clamp(z, Z_MIN, Z_MAX);
+    view.x = cx - (cx - view.x) * (nz / view.z);
+    view.y = cy - (cy - view.y) * (nz / view.z);
+    view.z = nz; apply();
+  }
+  const zoomCenter = k => zoomAt(view.z * k, innerWidth / 2, innerHeight / 2);
+  function fitRect(r, max = 1) {
+    const top = 56 + topInset(), bottom = 70;
+    const w = innerWidth - PAD * 2, h = innerHeight - top - bottom - PAD;
+    const z = clamp(Math.min(w / r.w, h / r.h, max), Z_MIN, Z_MAX);
+    view = { z, x: (innerWidth - r.w * z) / 2 - r.x * z, y: top + PAD / 2 + (h - r.h * z) / 2 - r.y * z };
+    apply();
+  }
+  function bounds() {
+    const rs = [];
+    for (const f of files()) { const b = doc.boards[f]; rs.push({ x: b.x, y: b.y - 32, w: b.w, h: b.h + 32 }); }
+    for (const el of world.querySelectorAll('.note, .ann')) rs.push({ x: el.offsetLeft, y: el.offsetTop, w: el.offsetWidth, h: el.offsetHeight });
+    if (!rs.length) return null;
+    const x = Math.min(...rs.map(r => r.x)), y = Math.min(...rs.map(r => r.y));
+    return { x, y, w: Math.max(...rs.map(r => r.x + r.w)) - x, h: Math.max(...rs.map(r => r.y + r.h)) - y };
+  }
+  const fitAll = () => { const r = bounds(); if (r) fitRect(r); };
+  const fitBoard = f => { const b = doc.boards[f]; if (b) fitRect({ x: b.x, y: b.y - 32, w: b.w, h: b.h + 32 }, 2); };
+  const toWorld = (cx, cy) => ({ x: (cx - view.x) / view.z, y: (cy - view.y) / view.z });
+
+  // ---------- render ----------
+  function boardEl(f) {
+    const el = document.createElement('div');
+    el.className = 'board'; el.dataset.file = f;
+    el.innerHTML = `<div class="sheet"><iframe loading="lazy" tabindex="-1" sandbox="${SANDBOX}"></iframe></div><div class="hit"></div>
+      <div class="label"><span class="name"></span>
+      <button type="button" data-act="focus" title="Open full size">${ICON_EXPAND}</button>
+      <a target="_blank" rel="noopener" title="Open in new tab">${ICON_OPEN}</a></div>`;
+    el.querySelector('iframe').title = f;
+    world.appendChild(el);
+    boardEls.set(f, el);
+    return el;
+  }
+  function render() {
+    document.title = doc.title || 'Canvas';
+    $('#title').textContent = doc.title || 'Canvas';
+    const fs = files();
+    $('#count').textContent = fs.length === 1 ? '1 board' : `${fs.length} boards`;
+    $('#empty').hidden = fs.length > 0 || doc.annotations.length > 0;
+    $('#empty').textContent = 'No boards yet';
+    for (const [f, el] of boardEls) if (!doc.boards[f]) { el.remove(); boardEls.delete(f); }
+    for (const f of fs) {
+      const b = doc.boards[f], el = boardEls.get(f) ?? boardEl(f), url = fileUrl(f);
+      Object.assign(el.style, { left: b.x + 'px', top: b.y + 'px', width: b.w + 'px', height: b.h + 'px' });
+      el.querySelector('.name').textContent = b.title || f;
+      if (el.dataset.url !== url) { el.dataset.url = url; el.querySelector('iframe').src = url; el.querySelector('a').href = url; }
+    }
+    world.querySelectorAll('.note').forEach(n => n.remove());
+    for (const n of Object.values(doc.notes ?? {})) {
+      const el = document.createElement('div');
+      el.className = 'note ' + (['title1', 'title2', 'text'].includes(n.kind) ? n.kind : 'text');
+      el.textContent = n.text ?? '';
+      Object.assign(el.style, { left: (n.x ?? 0) + 'px', top: (n.y ?? 0) + 'px' });
+      if (n.maxW) el.style.maxWidth = n.maxW + 'px';
+      world.appendChild(el);
+    }
+    renderAnns();
+    renderPanel();
+    markSelection();
+    if (focusFile && !doc.boards[focusFile]) closeFocus();
+    else if (focusFile) layoutFocus();
+  }
+  function renderAnns() {
+    world.querySelectorAll('.ann:not(.editing)').forEach(n => n.remove());
+    for (const a of doc.annotations) {
+      if (editing === a.id) continue;
+      const el = document.createElement('div');
+      el.className = 'ann'; el.dataset.id = a.id;
+      if (a.color) el.dataset.color = a.color;
+      el.classList.toggle('bold', !!a.bold); el.classList.toggle('italic', !!a.italic);
+      Object.assign(el.style, { left: a.x + 'px', top: a.y + 'px', width: (a.w || 320) + 'px' });
+      if (typeof a.size === 'number') el.style.fontSize = a.size + 'px';
+      if (a.text) el.textContent = a.text; else el.innerHTML = '<span class="empty">Empty note</span>';
+      world.appendChild(el);
+    }
+  }
+  function renderPanel() {
+    const list = $('#panel-list'); list.textContent = '';
+    for (const f of files()) {
+      const li = document.createElement('li'), b = doc.boards[f];
+      li.innerHTML = '<button type="button"><span class="t"></span><span class="s"></span></button>';
+      li.querySelector('.t').textContent = b.title || f;
+      li.querySelector('.s').textContent = `${b.w}×${b.h}`;
+      li.querySelector('button').dataset.file = f;
+      li.querySelector('button').addEventListener('click', () => { select({ type: 'board', id: f }); fitBoard(f); });
+      list.appendChild(li);
+    }
+  }
+  function select(s) { sel = s; markSelection(); }
+  function markSelection() {
+    for (const [f, el] of boardEls) el.classList.toggle('selected', sel?.type === 'board' && sel.id === f);
+    world.querySelectorAll('.ann').forEach(el => el.classList.toggle('selected', sel?.type === 'ann' && sel.id === el.dataset.id));
+    $('#panel-list').querySelectorAll('button').forEach(b => b.setAttribute('aria-current', String(sel?.type === 'board' && sel.id === b.dataset.file)));
+    placeAnnBar();
+  }
+  function placeAnnBar() {
+    const bar = $('#ann-bar');
+    const a = sel?.type === 'ann' && doc && ann(sel.id);
+    if (!a || busy) { bar.hidden = true; return; }
+    bar.hidden = false;
+    bar.querySelectorAll('.dot').forEach(d => d.setAttribute('aria-pressed', String((a.color || '') === d.dataset.color)));
+    const x = a.x * view.z + view.x, y = a.y * view.z + view.y;
+    bar.style.left = clamp(x, 8, innerWidth - bar.offsetWidth - 8) + 'px';
+    bar.style.top = clamp(y - 48, 8 + topInset(), innerHeight - 52) + 'px';
+  }
+
+  // ---------- data ----------
+  async function load(first) {
+    let r;
+    try { r = await fetch(API, { cache: 'no-store', credentials: 'same-origin' }); } catch { if (first) toast('Can’t reach the server'); return; }
+    if (r.status === 401) { location.href = '/login?next=' + encodeURIComponent(location.pathname); return; }
+    if (!r.ok) { $('#empty').hidden = false; $('#empty').textContent = r.status === 404 ? 'Canvas not found' : 'Canvas didn’t load'; return; }
+    const next = await r.json();
+    if (!first && data && next.updatedAt === data.updatedAt) return;
+    if (!first && (busy || editing || saving || saveTimer)) return;
+    data = next; doc = data.canvas;
+    doc.boards ??= {}; doc.order ??= Object.keys(doc.boards); doc.notes ??= {}; doc.annotations ??= [];
+    for (const f of Object.keys(doc.boards)) if (!doc.order.includes(f)) doc.order.push(f);
+    if (sel?.type === 'ann' && !ann(sel.id)) sel = null;
+    render();
+    if (first) {
+      const v = store.get(viewKey);
+      if (v && isFinite(v.z)) { view = v; apply(); } else fitAll();
+      const f = location.hash && decodeURIComponent(location.hash.slice(1));
+      if (f && doc.boards[f]) openFocus(f);
+    }
+  }
+  function poll() {
+    setTimeout(async () => { if (!document.hidden) await load(false); poll(); }, data?.poll ?? 5000);
+  }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) load(false); });
+
+  function save() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      saveTimer = null; saving = true;
+      const boards = Object.fromEntries(files().map(f => [f, { x: doc.boards[f].x, y: doc.boards[f].y }]));
+      try {
+        const r = await fetch(API + '/layout', { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ boards, annotations: doc.annotations }) });
+        if (!r.ok) throw new Error(r.status === 401 ? 'signed out' : 'server error');
+        data.updatedAt = (await r.json()).updatedAt;
+      } catch (err) { toast('Not saved: ' + err.message); }
+      saving = false;
+    }, 300);
+  }
+
+  // ---------- sticky notes ----------
+  function newAnnId() {
+    const n = Math.max(0, ...doc.annotations.map(a => +(a.id.match(/^note-(\d+)$/)?.[1] ?? 0)));
+    return 'note-' + (n + 1);
+  }
+  function createAnn(wx, wy) {
+    const a = { id: newAnnId(), x: Math.round(wx - 20), y: Math.round(wy - 20), w: 320, text: '' };
+    doc.annotations.push(a);
+    renderAnns(); select({ type: 'ann', id: a.id }); setTool('select');
+    editAnn(a.id);
+    $('#empty').hidden = true;
+  }
+  function editAnn(aid) {
+    const a = ann(aid), el = world.querySelector(`.ann[data-id="${CSS.escape(aid)}"]`);
+    if (!a || !el) return;
+    // Make the text readable while typing.
+    if (22 * view.z < 15) { const r = el.getBoundingClientRect(); zoomAt(16 / 22, r.left + r.width / 2, r.top + r.height / 2); }
+    editing = aid; el.classList.add('editing');
+    el.textContent = '';
+    const ta = document.createElement('textarea');
+    ta.value = a.text; ta.setAttribute('aria-label', 'Note text');
+    const grow = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
+    ta.addEventListener('input', grow);
+    ta.addEventListener('keydown', e => { if (e.key === 'Escape' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) { e.preventDefault(); ta.blur(); } });
+    ta.addEventListener('blur', finishEdit);
+    el.appendChild(ta); grow(); ta.focus();
+    placeAnnBar();
+  }
+  function finishEdit() {
+    if (!editing) return;
+    const aid = editing, a = ann(aid), el = world.querySelector('.ann.editing'), ta = el?.querySelector('textarea');
+    editing = null;
+    if (a && ta) a.text = ta.value.replace(/\s+$/, '');
+    el?.remove();
+    if (a && !a.text) { doc.annotations = doc.annotations.filter(x => x !== a); if (sel?.id === aid) sel = null; }
+    renderAnns(); markSelection(); save();
+  }
+  function deleteAnn(aid) {
+    doc.annotations = doc.annotations.filter(a => a.id !== aid);
+    if (sel?.id === aid) sel = null;
+    renderAnns(); markSelection(); save();
+  }
+  $('#ann-bar').addEventListener('pointerdown', e => e.preventDefault()); // keep the textarea focused
+  $('#ann-bar').addEventListener('click', e => {
+    const a = sel?.type === 'ann' && ann(sel.id); if (!a) return;
+    const dot = e.target.closest('.dot');
+    if (dot) {
+      if (dot.dataset.color) a.color = dot.dataset.color; else delete a.color;
+      const el = world.querySelector(`.ann[data-id="${CSS.escape(a.id)}"]`);
+      if (el) { if (a.color) el.dataset.color = a.color; else delete el.dataset.color; }
+      placeAnnBar(); save();
+    } else if (e.target.closest('#ann-del')) { if (editing) { editing = null; world.querySelector('.ann.editing')?.remove(); } deleteAnn(a.id); }
+  });
+
+  // ---------- tools ----------
+  function setTool(t) {
+    tool = t;
+    document.querySelectorAll('#tools [data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === t)));
+    stage.classList.toggle('hand', t === 'hand');
+    stage.classList.toggle('sticky', t === 'sticky');
+  }
+  $('#tools').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (b) setTool(b.dataset.tool); });
+
+  // ---------- pointer: tap, drag, pan, pinch ----------
+  const pts = new Map();
+  let g = null, lastTap = null;
+  stage.addEventListener('pointerdown', e => {
+    if (e.target.closest('.label button, .label a, textarea')) return;
+    if (editing) finishEdit();
+    try { stage.setPointerCapture(e.pointerId); } catch {}
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pts.size === 2) {
+      const [a, b] = [...pts.values()];
+      g = { kind: 'pinch', d: Math.hypot(a.x - b.x, a.y - b.y), w: toWorld((a.x + b.x) / 2, (a.y + b.y) / 2), z: view.z };
+      return;
+    }
+    if (pts.size > 2 || (e.button !== 0 && e.button !== 1)) return;
+    const annEl = e.target.closest('.ann'), board = e.target.closest('.board');
+    g = { kind: 'press', sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y, ann: annEl?.dataset.id, board: board?.dataset.file,
+      touch: e.pointerType !== 'mouse', forcePan: e.button === 1 || space || tool === 'hand', mode: null };
+  });
+  stage.addEventListener('pointermove', e => {
+    if (!pts.has(e.pointerId)) return;
+    pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (!g) return;
+    if (g.kind === 'pinch') {
+      if (pts.size < 2) return;
+      const [a, b] = [...pts.values()], d = Math.hypot(a.x - b.x, a.y - b.y), mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+      view.z = clamp(g.z * d / g.d, Z_MIN, Z_MAX); view.x = mx - g.w.x * view.z; view.y = my - g.w.y * view.z; apply();
+      return;
+    }
+    const dx = e.clientX - g.sx, dy = e.clientY - g.sy;
+    if (!g.mode) {
+      if (Math.hypot(dx, dy) < (g.touch ? 8 : 4)) return;
+      if (g.forcePan) g.mode = 'pan';
+      else if (g.ann) { g.mode = 'ann'; const a = ann(g.ann); g.ax = a.x; g.ay = a.y; select({ type: 'ann', id: g.ann }); }
+      else if (g.board && !g.touch && tool === 'select') { g.mode = 'board'; const b = doc.boards[g.board]; g.bx = b.x; g.by = b.y; select({ type: 'board', id: g.board }); }
+      else g.mode = 'pan';
+      busy = true; placeAnnBar();
+      if (g.mode === 'pan') stage.classList.add('grabbing');
+    }
+    if (g.mode === 'pan') { view.x = g.vx + dx; view.y = g.vy + dy; apply(); }
+    else if (g.mode === 'ann') {
+      const a = ann(g.ann); a.x = Math.round(g.ax + dx / view.z); a.y = Math.round(g.ay + dy / view.z);
+      const el = world.querySelector(`.ann[data-id="${CSS.escape(a.id)}"]`); el.style.left = a.x + 'px'; el.style.top = a.y + 'px';
+    } else if (g.mode === 'board') {
+      const b = doc.boards[g.board]; b.x = Math.round((g.bx + dx / view.z) / 10) * 10; b.y = Math.round((g.by + dy / view.z) / 10) * 10;
+      const el = boardEls.get(g.board); el.style.left = b.x + 'px'; el.style.top = b.y + 'px';
+    }
+  });
+  function endPointer(e) {
+    if (!pts.delete(e.pointerId) || !g) return;
+    if (g.kind === 'pinch') { if (pts.size === 0) g = null; return; }
+    const done = g; g = null; busy = false; stage.classList.remove('grabbing');
+    if (done.mode === 'ann' || done.mode === 'board') save();
+    if (!done.mode && e.type === 'pointerup') tap(done, e);
+    placeAnnBar();
+  }
+  stage.addEventListener('pointerup', endPointer);
+  stage.addEventListener('pointercancel', endPointer);
+
+  function tap(t, e) {
+    const key = t.ann ? 'a:' + t.ann : t.board ? 'b:' + t.board : 'bg';
+    const now = performance.now(), dbl = lastTap && lastTap.key === key && now - lastTap.t < 350 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 24;
+    lastTap = dbl ? null : { key, t: now, x: e.clientX, y: e.clientY };
+    if (tool === 'sticky' && !t.ann) { const w = toWorld(e.clientX, e.clientY); createAnn(w.x, w.y); return; }
+    if (tool === 'hand') return;
+    if (t.ann) { select({ type: 'ann', id: t.ann }); if (dbl) editAnn(t.ann); }
+    else if (t.board) { select({ type: 'board', id: t.board }); if (dbl) openFocus(t.board); }
+    else select(null);
+  }
+  stage.addEventListener('click', e => {
+    const btn = e.target.closest('[data-act="focus"]');
+    if (btn) openFocus(btn.closest('.board').dataset.file);
+  });
+
+  stage.addEventListener('wheel', e => {
+    e.preventDefault();
+    const k = e.deltaMode === 1 ? 16 : 1;
+    if (e.ctrlKey || e.metaKey) zoomAt(view.z * Math.exp(-e.deltaY * k * 0.01), e.clientX, e.clientY);
+    else { view.x -= e.deltaX * k; view.y -= e.deltaY * k; apply(); }
+  }, { passive: false });
+  // Safari trackpad pinch (touch pinch goes through pointer events above)
+  let gz = 1;
+  addEventListener('gesturestart', e => { e.preventDefault(); gz = view.z; });
+  addEventListener('gesturechange', e => { e.preventDefault(); if (!pts.size && !focusFile) zoomAt(gz * e.scale, e.clientX, e.clientY); });
+
+  // ---------- full-size view ----------
+  function openFocus(f) {
+    if (editing) finishEdit();
+    focusFile = f; focusFit = true; select({ type: 'board', id: f });
+    const url = fileUrl(f);
+    $('#focus-iframe').src = url; $('#focus-open').href = url;
+    $('#focus').hidden = false;
+    history.replaceState(null, '', '#' + encodeURIComponent(f));
+    layoutFocus();
+    $('#focus-back').focus();
+  }
+  function layoutFocus() {
+    const b = doc.boards[focusFile], fs = files(), body = $('#focus-body');
+    $('#focus-title').textContent = b.title || focusFile;
+    $('#focus-pos').textContent = `${fs.indexOf(focusFile) + 1} / ${fs.length}`;
+    const pad = 24, fit = Math.min(1, (body.clientWidth - pad * 2) / b.w, (body.clientHeight - pad * 2) / b.h);
+    const s = focusFit ? fit : focusZoom;
+    if (focusFit) focusZoom = fit;
+    Object.assign($('#focus-sizer').style, { width: b.w * s + pad * 2 + 'px', height: b.h * s + pad * 2 + 'px' });
+    Object.assign($('#focus-frame').style, { width: b.w + 'px', height: b.h + 'px', transform: `scale(${s})` });
+    $('#focus-zoom').textContent = Math.round(s * 100) + '%';
+    const url = fileUrl(focusFile);
+    if ($('#focus-iframe').getAttribute('src') !== url) $('#focus-iframe').src = url;
+  }
+  const focusBy = k => { focusFit = false; focusZoom = clamp(focusZoom * k, 0.1, 4); layoutFocus(); };
+  function closeFocus() {
+    focusFile = null; $('#focus').hidden = true; $('#focus-iframe').src = 'about:blank';
+    history.replaceState(null, '', location.pathname);
+  }
+  function stepFocus(d) { const fs = files(); if (fs.length) openFocus(fs[(fs.indexOf(focusFile) + d + fs.length) % fs.length]); }
+  $('#focus-back').addEventListener('click', closeFocus);
+  $('#focus-prev').addEventListener('click', () => stepFocus(-1));
+  $('#focus-next').addEventListener('click', () => stepFocus(1));
+  $('#focus-in').addEventListener('click', () => focusBy(1.25));
+  $('#focus-out').addEventListener('click', () => focusBy(0.8));
+  $('#focus-zoom').addEventListener('click', () => { if (focusFit) { focusFit = false; focusZoom = 1; } else focusFit = true; layoutFocus(); });
+  addEventListener('message', e => { if (e.data === 'canvas:escape' && focusFile) closeFocus(); });
+
+  // ---------- chrome ----------
+  $('#zoom-in').addEventListener('click', () => zoomCenter(1.25));
+  $('#zoom-out').addEventListener('click', () => zoomCenter(0.8));
+  $('#zoom').addEventListener('click', fitAll);
+  $('#fit').addEventListener('click', fitAll);
+  const togglePanel = () => { const p = $('#panel'); p.hidden = !p.hidden; $('#panel-btn').setAttribute('aria-pressed', String(!p.hidden)); };
+  $('#panel-btn').addEventListener('click', togglePanel);
+  if (id === 'local') $('#home').hidden = true;
+  addEventListener('resize', () => { if (focusFile) layoutFocus(); placeAnnBar(); });
+
+  let toastTimer;
+  function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 3200); }
+
+  addEventListener('keydown', e => {
+    if (e.target.closest?.('input, textarea, [contenteditable]')) return;
+    if (focusFile) {
+      if (e.key === 'Escape') closeFocus();
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') stepFocus(-1);
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') stepFocus(1);
+      else if (e.key === '+' || e.key === '=') focusBy(1.25);
+      else if (e.key === '-') focusBy(0.8);
+      else if (e.shiftKey && e.code === 'Digit1') { focusFit = true; layoutFocus(); }
+      return;
+    }
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.code === 'Space' && !space) { space = true; stage.classList.add('hand'); e.preventDefault(); return; }
+    const k = e.key.toLowerCase();
+    if (e.key === 'Escape') { select(null); setTool('select'); }
+    else if ((e.key === 'Backspace' || e.key === 'Delete') && sel?.type === 'ann') deleteAnn(sel.id);
+    else if (e.key === 'Enter' && sel?.type === 'ann') { e.preventDefault(); editAnn(sel.id); }
+    else if (e.key === 'Enter' && sel?.type === 'board') openFocus(sel.id);
+    else if (k === 'v') setTool('select');
+    else if (k === 'h') setTool('hand');
+    else if (k === 's' || k === 'n') setTool('sticky');
+    else if (k === 'b') togglePanel();
+    else if (e.shiftKey && e.code === 'Digit1') fitAll();
+    else if (e.shiftKey && e.code === 'Digit2' && sel?.type === 'board') fitBoard(sel.id);
+    else if (e.shiftKey && e.code === 'Digit0') zoomAt(1, innerWidth / 2, innerHeight / 2);
+    else if (e.key === '+' || e.key === '=') zoomCenter(1.25);
+    else if (e.key === '-') zoomCenter(0.8);
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      const fs = files(); if (!fs.length) return;
+      const i = sel?.type === 'board' ? fs.indexOf(sel.id) : -1;
+      const f = fs[(i + (e.key === 'ArrowRight' ? 1 : -1) + fs.length) % fs.length];
+      select({ type: 'board', id: f }); fitBoard(f);
+    }
+  });
+  addEventListener('keyup', e => { if (e.code === 'Space') { space = false; stage.classList.toggle('hand', tool === 'hand'); } });
+
+  load(true).then(poll);
+})();
+</script>
+</body>
+</html>

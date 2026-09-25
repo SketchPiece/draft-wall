@@ -4,9 +4,14 @@
 //   canvas serve  <dir> [--port 4870]    view locally with live reload
 //   canvas push   <dir> [--id <id>]      upload to the hosted canvas, print its URL
 //   canvas pull   <dir>                  bring sticky notes and board positions back from the hosted canvas
+//   canvas share  <dir|id> [add <email|@domain> [--role viewer|editor] | rm <email|@domain>]
 //   canvas list | canvas rm <id>
-//   canvas config --url <https://…> --token <token>
+//   canvas login | logout <email> | accounts [--default <email>]   Google accounts the CLI acts as
+//   canvas project [<dir>] [--account <email>] [--share "a@b.com:editor,@company.com"|none]
+//   canvas creators [add|rm <email|@domain>]                     (admins) who may create canvases
+//   canvas config --url <https://…>      hosted canvas; --as <email> picks the account for one command
 import http from 'node:http';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -146,19 +151,112 @@ function serve(dir, port, title) {
 }
 
 // ---------- hosted canvas ----------
-function remoteConfig() {
-  const c = readJson(CONFIG, {});
-  const url = (process.env.CANVAS_URL || c.url || '').replace(/\/$/, ''), token = process.env.CANVAS_TOKEN || c.token;
-  if (!url || !token) die(`No hosted canvas configured. Run: canvas config --url https://… --token …`);
-  return { url, token };
+// ~/.config/canvas/config.json: { url, accounts: { email: token }, default, projects: { <repo path>: { account, share: [{ email, role }] } } }
+const loadConfig = () => readJson(CONFIG, {});
+function saveConfig(c) {
+  fs.mkdirSync(path.dirname(CONFIG), { recursive: true });
+  fs.writeFileSync(CONFIG, JSON.stringify(c, null, 2) + '\n', { mode: 0o600 });
+}
+function serverUrl() {
+  const url = (process.env.CANVAS_URL || loadConfig().url || '').replace(/\/$/, '');
+  return url || die('No hosted canvas configured. Run: canvas config --url https://…');
 }
 
-async function call(method, route, body, headers = {}) {
-  const { url, token } = remoteConfig();
-  const r = await fetch(url + route, { method, body, headers: { authorization: `Bearer ${token}`, ...headers } });
+// A project is the git repo a canvas folder lives in (or the folder itself outside a repo).
+function projectRoot(dir) {
+  const start = path.resolve(dir);
+  for (let d = start; ; d = path.dirname(d)) {
+    if (fs.existsSync(path.join(d, '.git'))) return d;
+    if (path.dirname(d) === d) return start;
+  }
+}
+const projectOf = dir => loadConfig().projects?.[projectRoot(dir)] ?? {};
+
+// --as, then the account the canvas was pushed with, then the project's, then the default one.
+function pickAccount(dir, sidecar = {}) {
+  const c = loadConfig(), accounts = Object.keys(c.accounts ?? {});
+  if (!accounts.length) die('Not signed in. Run: canvas login');
+  const email = str(args.as) || sidecar.account || (dir && projectOf(dir).account) || c.default || (accounts.length === 1 ? accounts[0] : null);
+  if (!email) die(`Several accounts (${accounts.join(', ')}); pass --as <email> or set one: canvas project <dir> --account <email>`);
+  if (!c.accounts[email]) die(`${email} is not signed in here. Run: canvas login (signed in: ${accounts.join(', ')})`);
+  return email;
+}
+
+async function call(account, method, route, body, headers = {}) {
+  const r = await fetch(serverUrl() + route, { method, body, headers: { authorization: `Bearer ${loadConfig().accounts[account]}`, ...headers } });
   if (r.status === 404 && method === 'GET') return null;
-  if (!r.ok) die(`${method} ${route}: ${r.status} ${await r.text()}`);
+  if (r.status === 401) die(`The sign-in of ${account} has expired. Run: canvas login`);
+  if (!r.ok) die(`${method} ${route} as ${account}: ${r.status} ${(await r.json().catch(() => null))?.error ?? r.statusText}`);
   return r.status === 204 ? true : r.json();
+}
+
+// Opens Google sign-in in the browser; the server hands the token back to this one-off local listener.
+async function login() {
+  const url = serverUrl(), state = randomBytes(24).toString('base64url');
+  const got = await new Promise((resolve, reject) => {
+    const server = http.createServer((req, res) => {
+      const q = new URL(req.url, 'http://local').searchParams;
+      if (!req.url.startsWith('/callback') || q.get('state') !== state || !q.get('token')) { res.writeHead(404); res.end(); return; }
+      res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+      res.end(`<!doctype html><meta charset="utf-8"><title>Canvas CLI</title><body style="font:15px system-ui;padding:40px">The canvas CLI is signed in as <b>${q.get('email').replace(/[<&]/g, '')}</b>. You can close this tab.`);
+      server.close(); resolve({ email: q.get('email'), token: q.get('token') });
+    });
+    server.listen(0, '127.0.0.1', () => {
+      const link = `${url}/auth/cli?port=${server.address().port}&state=${state}`;
+      console.log(`Opening Google sign-in in the browser. If it doesn't open, go to:\n${link}`);
+      const opener = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'explorer' : 'xdg-open';
+      spawn(opener, [link], { detached: true, stdio: 'ignore' }).on('error', () => {}).unref();
+    });
+    setTimeout(() => { server.close(); reject(new Error('Timed out waiting for the sign-in')); }, 5 * 60_000).unref();
+  }).catch(e => die(e.message));
+  const c = loadConfig();
+  c.accounts = { ...c.accounts, [got.email]: got.token };
+  c.default ??= got.email;
+  delete c.token; delete c.password; // from the password era
+  saveConfig(c);
+  console.log(`Signed in as ${got.email}${c.default === got.email ? ' (default)' : ''}.`);
+}
+
+// "a@b.com:editor,@company.com" -> [{ email, role }]
+function parseShare(spec) {
+  if (spec === 'none') return [];
+  return spec.split(',').map(x => x.trim()).filter(Boolean).map(x => {
+    const [email, role = 'viewer'] = x.split(':');
+    if (!/^[^\s@]*@[^\s@]+\.[^\s@]+$/.test(email) || !['viewer', 'editor'].includes(role)) die(`Bad share entry "${x}": use a@b.com or @company.com, optionally :viewer or :editor`);
+    return { email: email.toLowerCase(), role };
+  });
+}
+const shareText = members => members.length ? members.map(m => `${m.email} (${m.role})`).join(', ') : 'nobody';
+
+function project(dir) {
+  const root = projectRoot(dir), c = loadConfig();
+  const p = { ...c.projects?.[root] };
+  if (str(args.account)) { if (!c.accounts?.[args.account]) die(`${args.account} is not signed in here. Run: canvas login`); p.account = args.account; }
+  if (str(args.share)) p.share = parseShare(args.share);
+  if (str(args.account) || str(args.share)) { c.projects = { ...c.projects, [root]: p }; saveConfig(c); }
+  console.log(`Project ${root}`);
+  console.log(`  account: ${p.account ?? '(not set)'}`);
+  console.log(`  share new canvases with: ${p.share ? shareText(p.share) : '(not set)'}`);
+  console.log(`  signed-in accounts: ${Object.keys(c.accounts ?? {}).join(', ') || '(none, run canvas login)'}`);
+}
+
+async function share(target) {
+  const dir = target && fs.existsSync(target) ? target : null;
+  const sidecar = dir ? readJson(path.join(dir, REMOTE), {}) : {};
+  const id = dir ? sidecar.id : target;
+  if (!id || !validId(id)) die(dir ? `${dir} hasn't been pushed yet (no ${REMOTE}).` : 'Usage: canvas share <dir|id> [add|rm <email>]');
+  const account = pickAccount(dir, sidecar);
+  const cur = await call(account, 'GET', `/api/canvases/${id}/access`);
+  if (!cur) die(`Canvas ${id} is not on the server.`);
+  const [, , op, who] = args._;
+  let members = cur.members;
+  if (op === 'add' || op === 'rm') {
+    const entry = parseShare(`${who ?? ''}:${str(args.role) ?? 'viewer'}`)[0];
+    members = members.filter(m => m.email !== entry.email);
+    if (op === 'add') members.push(entry);
+    members = (await call(account, 'PUT', `/api/canvases/${id}/access`, JSON.stringify({ members }), { 'content-type': 'application/json' })).members;
+  } else if (op) die('Usage: canvas share <dir|id> [add <email|@domain> [--role viewer|editor] | rm <email|@domain>]');
+  console.log(`${id}: owner ${cur.owner ?? '(admins)'}; shared with ${shareText(members)}`);
 }
 
 const slug = s => s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'canvas';
@@ -190,9 +288,10 @@ async function push(dir, idFlag) {
   const sidecar = readJson(path.join(root, REMOTE), {});
   const id = idFlag || sidecar.id || `${slug(path.basename(root))}-${randomBytes(2).toString('hex')}`;
   if (!validId(id)) die(`Bad canvas id "${id}": lowercase letters, digits and dashes.`);
+  const account = pickAccount(root, sidecar);
 
   // Keep notes the user added on the hosted canvas since the last pull; drop the ones removed here.
-  const remote = await call('GET', `/api/canvases/${id}`);
+  const remote = await call(account, 'GET', `/api/canvases/${id}`);
   const seen = new Set(sidecar.seen ?? []);
   const local = doc.annotations ?? [];
   const localIds = new Set(local.map(a => a.id));
@@ -214,18 +313,24 @@ async function push(dir, idFlag) {
     if (remote?.files?.[rel] !== files[rel]) uploads.push([rel, buf]);
   }
   for (const [rel, buf] of uploads) {
-    await call('PUT', `/api/canvases/${id}/files/${rel.split('/').map(encodeURIComponent).join('/')}`, buf, { 'content-type': contentType(rel) });
+    await call(account, 'PUT', `/api/canvases/${id}/files/${rel.split('/').map(encodeURIComponent).join('/')}`, buf, { 'content-type': contentType(rel) });
   }
-  const res = await call('POST', `/api/canvases/${id}/commit`, JSON.stringify({ canvas: doc, files }), { 'content-type': 'application/json' });
-  writeJson(path.join(root, REMOTE), { id, url: res.url, seen: (doc.annotations ?? []).map(a => a.id) });
-  console.log(`Pushed ${Object.keys(files).length} files (${uploads.length} changed): ${res.url}`);
+  const res = await call(account, 'POST', `/api/canvases/${id}/commit`, JSON.stringify({ canvas: doc, files }), { 'content-type': 'application/json' });
+  writeJson(path.join(root, REMOTE), { id, url: res.url, account, seen: (doc.annotations ?? []).map(a => a.id) });
+  console.log(`Pushed ${Object.keys(files).length} files (${uploads.length} changed) as ${account}: ${res.url}`);
+  // A new canvas gets the project's default sharing.
+  const members = !remote && projectOf(root).share;
+  if (members?.length) {
+    await call(account, 'PUT', `/api/canvases/${id}/access`, JSON.stringify({ members }), { 'content-type': 'application/json' });
+    console.log(`Shared with ${shareText(members)}`);
+  }
 }
 
 async function pull(dir) {
   const root = path.resolve(dir);
   const sidecar = readJson(path.join(root, REMOTE), {});
   if (!sidecar.id) die(`${dir} hasn't been pushed yet (no ${REMOTE}).`);
-  const remote = await call('GET', `/api/canvases/${sidecar.id}`);
+  const remote = await call(pickAccount(root, sidecar), 'GET', `/api/canvases/${sidecar.id}`);
   if (!remote) die(`Canvas ${sidecar.id} is not on the server.`);
   const file = path.join(root, 'canvas.json');
   const doc = readJson(file, { boards: {} });
@@ -257,21 +362,51 @@ switch (cmd) {
   case 'serve': serve(needDir(), Number(args.port) || 4870, str(args.title)); break;
   case 'push': await push(needDir(), str(args.id)); break;
   case 'pull': await pull(needDir()); break;
+  case 'share': await share(arg); break;
   case 'list': {
-    const items = await call('GET', '/api/canvases');
-    for (const c of items ?? []) console.log(`${c.id}\t${c.boards} boards\t${c.notes} notes\t${new Date(c.updatedAt).toISOString().slice(0, 16)}\t${c.title}`);
+    const account = pickAccount(null);
+    const items = await call(account, 'GET', '/api/canvases');
+    for (const c of items ?? []) console.log(`${c.id}\t${c.role}\t${c.boards} boards\t${c.notes} notes\t${new Date(c.updatedAt).toISOString().slice(0, 16)}\t${c.title}`);
     break;
   }
-  case 'rm': { if (!arg || !validId(arg)) die('Usage: canvas rm <id>'); await call('DELETE', `/api/canvases/${arg}`); console.log(`Deleted ${arg}`); break; }
+  case 'rm': { if (!arg || !validId(arg)) die('Usage: canvas rm <id>'); await call(pickAccount(null), 'DELETE', `/api/canvases/${arg}`); console.log(`Deleted ${arg}`); break; }
+  case 'login': await login(); break;
+  case 'logout': {
+    const c = loadConfig();
+    if (!arg || !c.accounts?.[arg]) die(`Usage: canvas logout <email> (signed in: ${Object.keys(c.accounts ?? {}).join(', ') || 'none'})`);
+    delete c.accounts[arg];
+    if (c.default === arg) c.default = Object.keys(c.accounts)[0];
+    saveConfig(c); console.log(`Signed out ${arg}`);
+    break;
+  }
+  case 'accounts': {
+    const c = loadConfig();
+    if (str(args.default)) { if (!c.accounts?.[args.default]) die(`${args.default} is not signed in here.`); c.default = args.default; saveConfig(c); }
+    const accounts = Object.keys(c.accounts ?? {});
+    if (!accounts.length) console.log('No accounts. Run: canvas login');
+    for (const a of accounts) console.log(`${a}${a === c.default ? '\t(default)' : ''}`);
+    break;
+  }
+  case 'project': project(arg ?? '.'); break;
+  case 'creators': {
+    const account = pickAccount(null);
+    let { creators } = await call(account, 'GET', '/api/settings');
+    const [, op, who] = args._;
+    if (op === 'add' || op === 'rm') {
+      const entry = (who ?? '').toLowerCase();
+      creators = creators.filter(x => x !== entry);
+      if (op === 'add') creators.push(entry);
+      ({ creators } = await call(account, 'PUT', '/api/settings', JSON.stringify({ creators }), { 'content-type': 'application/json' }));
+    } else if (op) die('Usage: canvas creators [add|rm <email|@domain>]');
+    console.log(`Admins and these may create canvases: ${creators.join(', ') || '(nobody else)'}`);
+    break;
+  }
   case 'config': {
-    const c = readJson(CONFIG, {});
-    if (str(args.url)) c.url = args.url;
-    if (str(args.token)) c.token = args.token;
-    fs.mkdirSync(path.dirname(CONFIG), { recursive: true });
-    fs.writeFileSync(CONFIG, JSON.stringify(c, null, 2) + '\n', { mode: 0o600 });
-    console.log(`${CONFIG}: url ${c.url ?? '(not set)'}, token ${c.token ? 'set' : '(not set)'}`);
+    const c = loadConfig();
+    if (str(args.url)) { c.url = args.url; saveConfig(c); }
+    console.log(`${CONFIG}: url ${c.url ?? '(not set)'}, accounts: ${Object.keys(c.accounts ?? {}).join(', ') || 'none'}`);
     break;
   }
   default:
-    die(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 9).map(l => l.replace(/^\/\/ ?/, '')).join('\n'));
+    die(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 12).map(l => l.replace(/^\/\/ ?/, '')).join('\n'));
 }

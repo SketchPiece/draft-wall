@@ -1,7 +1,9 @@
 import { del, get, list, put } from '@vercel/blob';
 
-// Layout in the private Blob store:
+// Layout in the private Blob store (under CANVAS_STORE_PREFIX, e.g. "dev/" for a local server):
+//   settings.json          { creators: ["a@b.com", "@company.com"] }
 //   c/<id>/state.json      { id, title, updatedAt, files: { path: hash }, canvas }
+//   c/<id>/access.json     { owner, epoch, members: [{ email, role }] }, apart from state so pushes and layout saves can't drop it
 //   c/<id>/files/<path>    board HTML and assets as pushed
 export type Canvas = {
   title?: string;
@@ -13,21 +15,34 @@ export type Canvas = {
 };
 export type Annotation = { id: string; x: number; y: number; w: number; text: string; color?: string; [key: string]: unknown };
 export type State = { id: string; title: string; updatedAt: number; files: Record<string, string>; canvas: Canvas };
+export type Role = 'viewer' | 'editor';
+// A member is one email or a whole domain ("@company.com").
+export type Access = { owner: string; epoch: number; members: { email: string; role: Role }[] };
+export type Settings = { creators: string[] };
 
-const statePath = (id: string) => `c/${id}/state.json`;
-const filePath = (id: string, path: string) => `c/${id}/files/${path}`;
+const PREFIX = process.env.CANVAS_STORE_PREFIX ?? '';
+const statePath = (id: string) => `${PREFIX}c/${id}/state.json`;
+const accessPath = (id: string) => `${PREFIX}c/${id}/access.json`;
+const filePath = (id: string, path: string) => `${PREFIX}c/${id}/files/${path}`;
 
-export async function readState(id: string): Promise<State | null> {
-  const r = await get(statePath(id), { access: 'private', useCache: false });
+async function readJson<T>(pathname: string): Promise<T | null> {
+  const r = await get(pathname, { access: 'private', useCache: false });
   if (!r || r.statusCode !== 200) return null;
   return JSON.parse(await new Response(r.stream).text());
 }
 
-export async function writeState(state: State) {
-  await put(statePath(state.id), JSON.stringify(state), {
+async function writeJson(pathname: string, value: unknown) {
+  await put(pathname, JSON.stringify(value), {
     access: 'private', addRandomSuffix: false, allowOverwrite: true, contentType: 'application/json',
   });
 }
+
+export const readState = (id: string) => readJson<State>(statePath(id));
+export const writeState = (state: State) => writeJson(statePath(state.id), state);
+export const readAccess = (id: string) => readJson<Access>(accessPath(id));
+export const writeAccess = (id: string, access: Access) => writeJson(accessPath(id), access);
+export const readSettings = async (): Promise<Settings> => ({ creators: [], ...await readJson<Settings>(`${PREFIX}settings.json`) });
+export const writeSettings = (settings: Settings) => writeJson(`${PREFIX}settings.json`, settings);
 
 export async function putFile(id: string, path: string, body: ArrayBuffer, contentType: string) {
   await put(filePath(id, path), Buffer.from(body), {
@@ -47,20 +62,19 @@ export async function deleteFiles(id: string, paths: string[]) {
 export async function deleteCanvas(id: string) {
   let cursor: string | undefined;
   do {
-    const page = await list({ prefix: `c/${id}/`, cursor });
+    const page = await list({ prefix: `${PREFIX}c/${id}/`, cursor });
     if (page.blobs.length) await del(page.blobs.map(b => b.pathname));
     cursor = page.hasMore ? page.cursor : undefined;
   } while (cursor);
 }
 
-export async function listStates(): Promise<State[]> {
+export async function listIds(): Promise<string[]> {
   const ids: string[] = [];
   let cursor: string | undefined;
   do {
-    const page = await list({ prefix: 'c/', mode: 'folded', cursor });
-    for (const folder of page.folders) ids.push(folder.slice(2, -1));
+    const page = await list({ prefix: `${PREFIX}c/`, mode: 'folded', cursor });
+    for (const folder of page.folders) ids.push(folder.slice(PREFIX.length + 2, -1));
     cursor = page.hasMore ? page.cursor : undefined;
   } while (cursor);
-  const states = await Promise.all(ids.map(readState));
-  return states.filter((s): s is State => !!s).sort((a, b) => b.updatedAt - a.updatedAt);
+  return ids;
 }

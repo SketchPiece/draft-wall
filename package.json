@@ -10,7 +10,8 @@
     "build": "node scripts/embed.mjs",
     "embed": "node scripts/embed.mjs",
     "typecheck": "node scripts/embed.mjs && tsc --noEmit",
-    "local": "node bin/canvas.mjs serve"
+    "local": "node bin/canvas.mjs serve",
+    "dev": "node scripts/embed.mjs && tsx --env-file=.env.local scripts/dev.ts"
   },
   "engines": {
     "node": "24.x"
@@ -20,7 +21,9 @@
     "hono": "^4.13.9"
   },
   "devDependencies": {
+    "@hono/node-server": "^2.1.1",
     "@types/node": "^26.6.2",
+    "tsx": "^4.23.15",
     "typescript": "^7.0.2"
   }
 }

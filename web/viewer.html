@@ -268,7 +268,7 @@ svg { display: block; flex: none; }
     stage.style.backgroundPosition = `${view.x}px ${view.y}px`;
     $('#zoom').textContent = Math.round(view.z * 100) + '%';
     placeAnnBar();
-    store.set(viewKey, view);
+    store.set(viewKey, { ...view, vw: innerWidth });
   }
   function zoomAt(z, cx, cy) {
     const nz = clamp(z, Z_MIN, Z_MAX);
@@ -398,7 +398,7 @@ svg { display: block; flex: none; }
     render();
     if (first) {
       const v = store.get(viewKey);
-      if (v && isFinite(v.z)) { view = v; apply(); } else fitAll();
+      if (v && isFinite(v.z) && Math.abs((v.vw ?? 0) - innerWidth) < 120) { view = { x: v.x, y: v.y, z: v.z }; apply(); } else fitAll();
       const f = location.hash && decodeURIComponent(location.hash.slice(1));
       if (f && doc.boards[f]) openFocus(f);
     }

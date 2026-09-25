@@ -121,6 +121,28 @@ svg { display: block; flex: none; }
 #ann-bar .del:hover { color: var(--danger); }
 
 #empty { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; text-align: center; line-height: 1.6; }
+#empty a { color: var(--text); pointer-events: auto; }
+body.readonly [data-tool="sticky"], body.readonly #tools .sep { display: none; }
+
+#share-btn { width: auto; padding: 0 10px; gap: 6px; display: flex; color: var(--text); font-weight: 500; }
+#share { position: fixed; z-index: 6; right: 12px; top: calc(56px + var(--top)); width: min(340px, calc(100vw - 24px)); padding: 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--chrome-shadow); }
+#share h2 { margin: 0 0 4px; font-size: 13px; font-weight: 600; }
+#share p { margin: 0 0 10px; color: var(--muted); font-size: 12px; }
+#share form { display: flex; gap: 6px; margin-bottom: 8px; }
+#share input, #share select { height: 30px; min-width: 0; padding: 0 8px; border: 1px solid var(--line-2); border-radius: 7px;
+  background: var(--panel-2); color: var(--text); font: inherit; }
+#share input { flex: 1; }
+#share input:focus, #share select:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+#share form button { height: 30px; padding: 0 10px; border-radius: 7px; background: var(--accent); color: #fff; font-weight: 500; }
+#share ul { list-style: none; margin: 0; padding: 0; max-height: 50vh; overflow: auto; }
+#share li { display: flex; align-items: center; gap: 6px; min-height: 34px; }
+#share li .e { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#share li .r { color: var(--faint); padding-right: 8px; }
+#share li select { height: 26px; padding: 0 4px; }
+#share li .ibtn:hover { color: var(--danger); }
+#share-copy { margin-top: 8px; height: 28px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--line-2); color: var(--text); }
+#share-copy:hover { background: var(--hover); }
 #toast { position: fixed; left: 50%; bottom: calc(72px + var(--bottom)); transform: translateX(-50%); z-index: 9; max-width: calc(100vw - 32px); padding: 8px 12px;
   background: var(--panel); border: 1px solid var(--line-2); border-radius: 9px; color: var(--text); box-shadow: var(--chrome-shadow); }
 
@@ -156,6 +178,8 @@ svg { display: block; flex: none; }
 </div>
 
 <div class="bar" id="bar-right">
+  <button class="ibtn" id="share-btn" hidden aria-expanded="false" aria-controls="share">Share</button>
+  <span class="sep" id="share-sep" hidden></span>
   <button class="ibtn" id="zoom-out" title="Zoom out (−)" aria-label="Zoom out">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M3.5 8h9"/></svg>
   </button>
@@ -198,6 +222,18 @@ svg { display: block; flex: none; }
   <h2>Boards</h2>
   <ol id="panel-list"></ol>
 </nav>
+
+<section id="share" hidden aria-labelledby="share-title">
+  <h2 id="share-title">Share</h2>
+  <p>People sign in with Google to open it. A domain like <b>@company.com</b> lets in everyone there.</p>
+  <form id="share-form">
+    <input id="share-email" type="text" inputmode="email" autocomplete="off" placeholder="name@gmail.com or @company.com" aria-label="Email or domain">
+    <select id="share-role" aria-label="Role"><option value="viewer">Can view</option><option value="editor">Can comment</option></select>
+    <button type="submit">Add</button>
+  </form>
+  <ul id="share-list"></ul>
+  <button type="button" id="share-copy">Copy link</button>
+</section>
 
 <div id="empty" hidden></div>
 <div id="toast" hidden role="status"></div>
@@ -247,6 +283,7 @@ svg { display: block; flex: none; }
   let view = { x: 0, y: 0, z: 1 }, sel = null, tool = 'select', space = false;
   let focusFile = null, focusFit = true, focusZoom = 1;
   let editing = null, saving = false, saveTimer = null, busy = false;
+  let canEdit = true; // viewers only look: no notes, no moving boards
   const boardEls = new Map();
   const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
   const store = {
@@ -374,7 +411,7 @@ svg { display: block; flex: none; }
   function placeAnnBar() {
     const bar = $('#ann-bar');
     const a = sel?.type === 'ann' && doc && ann(sel.id);
-    if (!a || busy) { bar.hidden = true; return; }
+    if (!a || busy || !canEdit) { bar.hidden = true; return; }
     bar.hidden = false;
     bar.querySelectorAll('.dot').forEach(d => d.setAttribute('aria-pressed', String((a.color || '') === d.dataset.color)));
     const x = a.x * view.z + view.x, y = a.y * view.z + view.y;
@@ -387,11 +424,16 @@ svg { display: block; flex: none; }
     let r;
     try { r = await fetch(API, { cache: 'no-store', credentials: 'same-origin' }); } catch { if (first) toast('Can’t reach the server'); return; }
     if (r.status === 401) { location.href = '/login?next=' + encodeURIComponent(location.pathname); return; }
+    if (r.status === 403) { if (first) denied((await r.json()).email); return; }
     if (!r.ok) { $('#empty').hidden = false; $('#empty').textContent = r.status === 404 ? 'Canvas not found' : 'Canvas didn’t load'; return; }
     const next = await r.json();
     if (!first && data && next.updatedAt === data.updatedAt) return;
     if (!first && (busy || editing || saving || saveTimer)) return;
     data = next; doc = data.canvas;
+    canEdit = !data.role || data.role !== 'viewer';
+    document.body.classList.toggle('readonly', !canEdit);
+    if (!canEdit && tool === 'sticky') setTool('select');
+    $('#share-btn').hidden = $('#share-sep').hidden = data.role !== 'owner';
     doc.boards ??= {}; doc.order ??= Object.keys(doc.boards); doc.notes ??= {}; doc.annotations ??= [];
     for (const f of Object.keys(doc.boards)) if (!doc.order.includes(f)) doc.order.push(f);
     if (sel?.type === 'ann' && !ann(sel.id)) sel = null;
@@ -403,12 +445,21 @@ svg { display: block; flex: none; }
       if (f && doc.boards[f]) openFocus(f);
     }
   }
+  function denied(email) {
+    const el = $('#empty'); el.hidden = false;
+    el.innerHTML = '<div><span></span><br>Ask the owner to share it, or <a>switch account</a>.</div>';
+    el.querySelector('span').textContent = `${email} has no access to this canvas.`;
+    el.querySelector('a').href = '/auth/google?next=' + encodeURIComponent(location.pathname);
+    $('#tools').hidden = $('#bar-right').hidden = true;
+    return false;
+  }
   function poll() {
     setTimeout(async () => { if (!document.hidden) await load(false); poll(); }, data?.poll ?? 5000);
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) load(false); });
 
   function save() {
+    if (!canEdit) return;
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
       saveTimer = null; saving = true;
@@ -435,6 +486,7 @@ svg { display: block; flex: none; }
     $('#empty').hidden = true;
   }
   function editAnn(aid) {
+    if (!canEdit) return;
     const a = ann(aid), el = world.querySelector(`.ann[data-id="${CSS.escape(aid)}"]`);
     if (!a || !el) return;
     // Make the text readable while typing.
@@ -460,6 +512,7 @@ svg { display: block; flex: none; }
     renderAnns(); markSelection(); save();
   }
   function deleteAnn(aid) {
+    if (!canEdit) return;
     doc.annotations = doc.annotations.filter(a => a.id !== aid);
     if (sel?.id === aid) sel = null;
     renderAnns(); markSelection(); save();
@@ -517,8 +570,8 @@ svg { display: block; flex: none; }
     if (!g.mode) {
       if (Math.hypot(dx, dy) < (g.touch ? 8 : 4)) return;
       if (g.forcePan) g.mode = 'pan';
-      else if (g.ann) { g.mode = 'ann'; const a = ann(g.ann); g.ax = a.x; g.ay = a.y; select({ type: 'ann', id: g.ann }); }
-      else if (g.board && !g.touch && tool === 'select') { g.mode = 'board'; const b = doc.boards[g.board]; g.bx = b.x; g.by = b.y; select({ type: 'board', id: g.board }); }
+      else if (g.ann && canEdit) { g.mode = 'ann'; const a = ann(g.ann); g.ax = a.x; g.ay = a.y; select({ type: 'ann', id: g.ann }); }
+      else if (g.board && !g.touch && tool === 'select' && canEdit) { g.mode = 'board'; const b = doc.boards[g.board]; g.bx = b.x; g.by = b.y; select({ type: 'board', id: g.board }); }
       else g.mode = 'pan';
       busy = true; placeAnnBar();
       if (g.mode === 'pan') stage.classList.add('grabbing');
@@ -617,6 +670,50 @@ svg { display: block; flex: none; }
   if (id === 'local') $('#home').hidden = true;
   addEventListener('resize', () => { if (focusFile) layoutFocus(); placeAnnBar(); });
 
+  // ---------- sharing (owner only) ----------
+  let access = null;
+  const ROLES = { viewer: 'Can view', editor: 'Can comment' };
+  async function saveAccess(members) {
+    const r = await fetch(API + '/access', { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ members }) });
+    if (!r.ok) { toast('Not shared: ' + ((await r.json().catch(() => null))?.error ?? 'server error')); return; }
+    access = await r.json(); renderShare();
+    load(false); // removing someone changes the file links
+  }
+  function renderShare() {
+    const list = $('#share-list'); list.textContent = '';
+    const row = (email, right) => { const li = document.createElement('li'); li.innerHTML = '<span class="e"></span>'; li.firstChild.textContent = email; li.append(...right); list.appendChild(li); };
+    if (access.owner) { const r = document.createElement('span'); r.className = 'r'; r.textContent = 'Owner'; row(access.owner, [r]); }
+    for (const m of access.members) {
+      const sel = document.createElement('select'); sel.setAttribute('aria-label', 'Role for ' + m.email);
+      sel.innerHTML = Object.entries(ROLES).map(([v, t]) => `<option value="${v}">${t}</option>`).join('');
+      sel.value = m.role;
+      sel.addEventListener('change', () => saveAccess(access.members.map(x => x === m ? { ...x, role: sel.value } : x)));
+      const del = document.createElement('button'); del.type = 'button'; del.className = 'ibtn'; del.setAttribute('aria-label', 'Remove ' + m.email); del.title = 'Remove';
+      del.innerHTML = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M4 4l8 8M12 4l-8 8"/></svg>';
+      del.addEventListener('click', () => saveAccess(access.members.filter(x => x !== m)));
+      row(m.email, [sel, del]);
+    }
+  }
+  async function toggleShare() {
+    const p = $('#share'), open = p.hidden;
+    p.hidden = !open; $('#share-btn').setAttribute('aria-expanded', String(open));
+    if (!open) return;
+    const r = await fetch(API + '/access', { cache: 'no-store', credentials: 'same-origin' });
+    if (!r.ok) { toast('Sharing didn’t load'); return; }
+    access = await r.json(); renderShare(); $('#share-email').focus();
+  }
+  $('#share-btn').addEventListener('click', toggleShare);
+  $('#share-form').addEventListener('submit', e => {
+    e.preventDefault();
+    const email = $('#share-email').value.trim().toLowerCase();
+    if (!/^[^\s@,]*@[^\s@,]+\.[^\s@,]+$/.test(email)) { toast('Enter an email or a domain like @company.com'); return; }
+    $('#share-email').value = '';
+    saveAccess([...access.members.filter(m => m.email !== email), { email, role: $('#share-role').value }]);
+  });
+  $('#share-copy').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(location.origin + location.pathname); toast('Link copied'); } catch { toast(location.origin + location.pathname); }
+  });
+
   let toastTimer;
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 3200); }
 
@@ -634,13 +731,13 @@ svg { display: block; flex: none; }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.code === 'Space' && !space) { space = true; stage.classList.add('hand'); e.preventDefault(); return; }
     const k = e.key.toLowerCase();
-    if (e.key === 'Escape') { select(null); setTool('select'); }
+    if (e.key === 'Escape') { select(null); setTool('select'); if (!$('#share').hidden) toggleShare(); }
     else if ((e.key === 'Backspace' || e.key === 'Delete') && sel?.type === 'ann') deleteAnn(sel.id);
     else if (e.key === 'Enter' && sel?.type === 'ann') { e.preventDefault(); editAnn(sel.id); }
     else if (e.key === 'Enter' && sel?.type === 'board') openFocus(sel.id);
     else if (k === 'v') setTool('select');
     else if (k === 'h') setTool('hand');
-    else if (k === 's' || k === 'n') setTool('sticky');
+    else if ((k === 's' || k === 'n') && canEdit) setTool('sticky');
     else if (k === 'b') togglePanel();
     else if (e.shiftKey && e.code === 'Digit1') fitAll();
     else if (e.shiftKey && e.code === 'Digit2' && sel?.type === 'board') fitBoard(sel.id);
@@ -656,7 +753,7 @@ svg { display: block; flex: none; }
   });
   addEventListener('keyup', e => { if (e.code === 'Space') { space = false; stage.classList.toggle('hand', tool === 'hand'); } });
 
-  load(true).then(poll);
+  load(true).then(() => { if (data) poll(); });
 })();
 </script>
 </body>

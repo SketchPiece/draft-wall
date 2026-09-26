@@ -155,7 +155,7 @@ api.put('/canvases/:id/files/*', async c => {
   const id = c.req.param('id');
   const path = decodeURIComponent(c.req.path.split('/files/').slice(1).join('/files/'));
   if (!validPath(path)) return c.json({ error: `Bad file path: ${path}` }, 400);
-  await store.putFile(id, path, await c.req.arrayBuffer(), contentType(path));
+  await store.putFile(id, path, await c.req.arrayBuffer());
   return c.body(null, 204);
 });
 

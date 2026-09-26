@@ -1,5 +1,4 @@
-// Local server for the hosted app: `npm run dev` (env from .env.local, e.g. `vercel env pull .env.local`).
-// Set CANVAS_STORE_PREFIX=dev/ there so local canvases stay apart from production ones in the Blob store.
+// Local server for the hosted app: `npm run dev` (env from .env.local). Canvases go to ./data unless CANVAS_DATA_DIR says otherwise.
 import { serve } from '@hono/node-server';
 import { Hono } from 'hono';
 import { setCookie } from 'hono/cookie';

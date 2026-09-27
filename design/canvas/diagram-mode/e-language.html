@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="board" content="1280x800">
+<title>E. Какой язык</title>
+<link rel="stylesheet" href="_shared.css">
+<style>
+body { background: #fff; }
+.page { display: flex; flex-direction: column; gap: 34px; padding: 40px 44px 36px; height: 800px; }
+.cols { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+.col { display: flex; flex-direction: column; gap: 14px; padding: 22px 22px 20px; border: 1px solid var(--rule); border-radius: 10px; }
+.col.pick { border: 2px solid var(--accent); padding: 21px 21px 19px; background: linear-gradient(var(--accent-tint), #fff 40%); }
+.col header { display: flex; align-items: center; justify-content: space-between; }
+.tag { padding: 3px 8px; border-radius: 5px; background: var(--accent); color: #fff; font: 500 12px var(--mono); }
+.col .src { font-size: 14px; line-height: 1.65; padding: 12px 14px; background: var(--paper); border-radius: 6px; min-height: 150px; }
+.pc { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 9px; font-size: 16px; }
+.pc li { display: grid; grid-template-columns: 16px 1fr; gap: 6px; }
+.pc .p::before { content: "+"; color: var(--add); font-weight: 700; }
+.pc .m::before { content: "−"; color: var(--del); font-weight: 700; }
+.plan { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-top: auto; padding-top: 22px; border-top: 1px solid var(--rule); }
+.plan div { display: grid; grid-template-columns: 30px 1fr; gap: 10px; font-size: 14.5px; }
+.plan b { display: block; font-weight: 600; }
+.plan em { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font: 700 13px var(--mono); font-style: normal; }
+.plan span { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="page">
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <div class="eyebrow">Общий язык</div>
+    <h1>Писать на Mermaid, рисовать своим движком</h1>
+  </div>
+  <div class="cols">
+    <section class="col pick">
+      <header><h2>Mermaid</h2><span class="tag">советую</span></header>
+<pre class="src"><span class="k">flowchart</span> LR
+  cli([<span class="s">canvas push</span>])
+  cli --&gt;|<span class="s">1. PUT</span>| api[<span class="s">Hosted app</span>]
+  api --&gt; vol[(<span class="s">Volume</span>)]<span class="a">:::hl</span></pre>
+      <ul class="pc">
+        <li class="p">агенты пишут его без ошибок, учить нечему</li>
+        <li class="p">тот же файл рисует GitHub в README и PR</li>
+        <li class="p">поток, последовательность, состояния, данные</li>
+        <li class="m">своя раскладка у него средняя — рендер делаем сами</li>
+      </ul>
+    </section>
+    <section class="col">
+      <header><h2>D2</h2></header>
+<pre class="src">cli: canvas push {shape: oval}
+api: Hosted app
+vol: Volume {shape: cylinder}
+cli -&gt; api: 1. PUT
+api -&gt; vol {class: hl}</pre>
+      <ul class="pc">
+        <li class="p">самый чистый синтаксис и красивая раскладка</li>
+        <li class="m">агенты пишут его хуже, чаще ошибаются</li>
+        <li class="m">движок на Go: wasm на ~10 МБ или рендер на сервере</li>
+        <li class="m">GitHub его не рисует</li>
+      </ul>
+    </section>
+    <section class="col">
+      <header><h2>Свой язык</h2></header>
+<pre class="src">canvas push (actor)
+  -&gt; Hosted app : 1. PUT
+Hosted app -&gt; Volume (store, hl)</pre>
+      <ul class="pc">
+        <li class="p">полный контроль над каждым приёмом</li>
+        <li class="m">новый язык: учить и агентов, и людей</li>
+        <li class="m">файл нигде, кроме драфтвола, не откроется</li>
+      </ul>
+    </section>
+  </div>
+  <div class="plan">
+    <div><em>1</em><p><b>.mmd становится бордом</b><span>mermaid.js с темой драфтвола. Быстро, но стиль лишь приблизительный.</span></p></div>
+    <div><em>2</em><p><b>Свой рендер на ELK</b><span>Стиль с этих бордов, узлы можно двигать, позиции живут в canvas.json.</span></p></div>
+    <div><em>3</em><p><b>Стикеры на узлах и «было → стало»</b><span>Заметка едет за узлом; две версии файла показываются разницей.</span></p></div>
+  </div>
+</div>
+</body>
+</html>

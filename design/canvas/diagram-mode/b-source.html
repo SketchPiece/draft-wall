@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="board" content="1280x800">
+<title>B. Текст и картинка</title>
+<link rel="stylesheet" href="_shared.css">
+<style>
+.wrap { display: grid; grid-template-columns: 500px 1fr; height: 800px; }
+.left { display: flex; flex-direction: column; gap: 22px; padding: 44px 36px 36px 44px; background: #fff; border-right: 1px solid var(--rule); }
+.file { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 1px solid var(--rule); font: 500 13px var(--mono); color: var(--muted); }
+.file b { color: var(--ink); font-weight: 500; }
+.right { position: relative; padding: 44px 44px 36px; display: flex; flex-direction: column; gap: 18px; }
+.hint { display: flex; gap: 28px; font-size: 14px; color: var(--muted); }
+.hint b { color: var(--ink); font-weight: 600; }
+.lead { font-size: 16px; color: var(--muted); max-width: 42ch; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="left">
+    <div class="eyebrow">Источник</div>
+    <h1>Диаграмма — это текстовый файл рядом с бордами</h1>
+    <p class="lead">Агент пишет Mermaid, как привык. Драфтвол рисует его в своём стиле и держит позиции узлов отдельно, в canvas.json.</p>
+    <div>
+      <div class="file"><b>push.mmd</b><span>Mermaid · flowchart</span></div>
+<pre class="src"><span class="ln">1</span><span class="c">---</span>
+<span class="ln">2</span><span class="c">title: Push: CLI → Railway</span>
+<span class="ln">3</span><span class="c">---</span>
+<span class="ln">4</span><span class="k">flowchart</span> LR
+<span class="ln">5</span>  <span class="k">subgraph</span> m [Your machine]
+<span class="ln">6</span>    files[(<span class="s">Canvas folder</span>)]
+<span class="ln">7</span>    cli([<span class="s">canvas push</span>])
+<span class="ln">8</span>  <span class="k">end</span>
+<span class="ln">9</span>  <span class="k">subgraph</span> r [Railway]
+<span class="ln">10</span>    api[<span class="s">Hosted app</span>] --&gt;|<span class="s">2.</span>| access
+<span class="on"><span class="ln">11</span>    access[<span class="s">Access check</span>]<span class="a">:::hl</span></span>
+<span class="ln">12</span>    access --&gt;|<span class="s">3. commit</span>| vol[(<span class="s">Volume</span>)]
+<span class="ln">13</span>  <span class="k">end</span>
+<span class="ln">14</span>  files --&gt;|<span class="s">reads</span>| cli
+<span class="ln">15</span>  cli --&gt;|<span class="s">1. PUT files/*</span>| api
+<span class="ln">16</span>  you([<span class="s">You</span>])<span class="a">:::ext</span> --&gt; viewer[<span class="s">Viewer</span>]
+<span class="ln">17</span>  viewer -.-&gt;|<span class="s">GET canvases/:id</span>| api</pre>
+    </div>
+  </div>
+  <div class="right paper">
+    <div class="eyebrow">Борд · push.mmd</div>
+    <svg class="dia" id="d" viewBox="0 0 1000 600" width="692" height="415" style="margin-top:14px"></svg>
+    <div class="hint" style="margin-top:auto">
+      <p><b>Узел перетащили</b><br>позиция ушла в canvas.json, .mmd не менялся</p>
+      <p><b>Агент поменял текст</b><br>новые узлы встают рядом, старые остаются где были</p>
+    </div>
+  </div>
+</div>
+<script src="_dia.js"></script>
+<script>
+flow(document.getElementById('d'), {
+  groups: [ { x: 10, y: 10, w: 290, h: 420, t: 'Your machine' }, { x: 360, y: 10, w: 630, h: 420, t: 'Railway' } ],
+  nodes: {
+    files: { x: 45, y: 70, w: 220, h: 64, t: 'Canvas folder', shape: 'store' },
+    cli: { x: 45, y: 270, w: 220, h: 50, t: 'canvas push', shape: 'actor' },
+    api: { x: 400, y: 270, w: 220, h: 50, t: 'Hosted app' },
+    access: { x: 730, y: 270, w: 220, h: 50, t: 'Access check', k: 'hl' },
+    vol: { x: 730, y: 70, w: 220, h: 64, t: 'Volume', shape: 'store' },
+    viewer: { x: 400, y: 520, w: 220, h: 50, t: 'Viewer' },
+    you: { x: 45, y: 520, w: 220, h: 50, t: 'You', shape: 'actor', k: 'ext' },
+  },
+  edges: [
+    ['files', 'cli', { t: 'reads' }],
+    ['cli', 'api', { t: 'PUT files/*', n: 1, k: 'hl' }],
+    ['api', 'access', { n: 2, k: 'hl' }],
+    ['access', 'vol', { t: 'commit', n: 3, k: 'hl' }],
+    ['you', 'viewer', { t: 'opens link' }],
+    ['viewer', 'api', { t: 'GET canvases/:id', k: 'dash' }],
+  ],
+});
+</script>
+</body>
+</html>

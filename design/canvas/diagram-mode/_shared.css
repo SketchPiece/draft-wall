@@ -1,0 +1,76 @@
+/* Diagram mode proposal. The diagram look: paper ground with the canvas dot grid, ink strokes, one blue for "look here". */
+@import url("https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap");
+:root {
+  --paper: #f7f7f5; --card: #ffffff; --ink: #1b1b1f; --muted: #6b6b73; --faint: #a3a3ab;
+  --rule: #dedee2; --edge: #8a8a93; --dot: rgba(27,27,31,.09);
+  --accent: #2f63e6; --accent-tint: #e9effd;
+  --add: #1f8a4c; --add-tint: #e4f4ea; --del: #d93036; --del-tint: #fdecec;
+  --hl-ink: #1c3f99; --add-ink: #14603a; --del-ink: #a3262a; --del-sub: #c46a6c; --on-accent: #fff;
+  --sans: "IBM Plex Sans", -apple-system, system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+  /* viewer chrome (dark, as in draftwall) */
+  --v-bg: #0a0a0a; --v-panel: #111111; --v-line: rgba(255,255,255,.08); --v-text: #ececec; --v-muted: #8e8e8e; --v-dot: rgba(255,255,255,.075);
+  color-scheme: light;
+}
+*, *::before, *::after { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; width: 1280px; height: 800px; overflow: hidden; }
+body { background: var(--paper); color: var(--ink); font: 15px/1.45 var(--sans); -webkit-font-smoothing: antialiased; }
+.paper { background-color: var(--paper); background-image: radial-gradient(circle, var(--dot) 1px, transparent 1.3px); background-size: 20px 20px; }
+h1 { margin: 0; font-size: 30px; line-height: 1.15; font-weight: 650; letter-spacing: -.02em; text-wrap: balance; }
+h2 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
+p { margin: 0; }
+.eyebrow { font: 500 12px/1 var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.muted { color: var(--muted); }
+code, .mono { font-family: var(--mono); font-size: .92em; }
+
+/* Diagram SVG pieces (drawn by _dia.js) */
+svg.dia { display: block; overflow: visible; font-family: var(--sans); }
+.dia .n-box { fill: var(--card); stroke: var(--ink); stroke-width: 1.5; }
+.dia .n-t { fill: var(--ink); font-size: 15px; font-weight: 600; }
+.dia .n-rule { stroke: var(--rule); stroke-width: 1.5; }
+.dia .n-f { fill: var(--ink); font: 13px var(--mono); }
+.dia .n-s { fill: var(--muted); font: 12px var(--mono); }
+.dia .ext .n-box { fill: transparent; stroke: var(--muted); stroke-dasharray: 5 4; }
+.dia .ext .n-t { fill: var(--muted); font-weight: 500; }
+.dia .hl .n-box { fill: var(--accent-tint); stroke: var(--accent); stroke-width: 2; }
+.dia .hl .n-t { fill: var(--hl-ink); }
+.dia .add .n-box { fill: var(--add-tint); stroke: var(--add); stroke-width: 2; }
+.dia .add .n-t { fill: var(--add-ink); }
+.dia .del .n-box { fill: var(--del-tint); stroke: var(--del); stroke-dasharray: 6 4; }
+.dia .del .n-t { fill: var(--del-ink); text-decoration: line-through; }
+.dia .del .n-s { fill: var(--del-sub); }
+.dia .badge { fill: var(--on-accent); font: 700 12px var(--mono); }
+.dia .grp { fill: rgba(27,27,31,.025); stroke: var(--rule); stroke-width: 1.5; stroke-dasharray: 2 4; stroke-linecap: round; }
+.dia .grp-t { fill: var(--muted); font: 500 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; }
+.dia .e { fill: none; stroke: var(--edge); stroke-width: 1.5; }
+.dia .e.hl { stroke: var(--accent); stroke-width: 2.25; }
+.dia .e.dash { stroke-dasharray: 5 5; }
+.dia .e.add { stroke: var(--add); stroke-width: 2; }
+.dia .e.del { stroke: var(--del); stroke-dasharray: 6 4; }
+.dia .e-lb rect { fill: var(--paper); }
+.dia .e-lb text { fill: var(--muted); font: 12px var(--mono); }
+.dia .e-lb.hl text { fill: var(--accent); font-weight: 500; }
+.dia .step circle { fill: var(--accent); }
+.dia .step text { fill: var(--on-accent); font: 700 12px var(--mono); }
+.dia .life { stroke: var(--rule); stroke-width: 1.5; stroke-dasharray: 3 5; }
+.dia .act { fill: var(--accent); fill-opacity: .12; stroke: var(--accent); stroke-width: 1.25; }
+
+/* Small printed source listing */
+.src { margin: 0; font: 13.5px/1.7 var(--mono); color: #3a3a42; white-space: pre; tab-size: 2; }
+.src .k { color: #7a3fc2; } .src .c { color: var(--faint); } .src .s { color: #1f7a4a; } .src .a { color: var(--accent); font-weight: 500; }
+.src .ln { display: inline-block; width: 2.2em; color: var(--faint); user-select: none; }
+.src .on { background: var(--accent-tint); box-shadow: -8px 0 0 var(--accent-tint), 8px 0 0 var(--accent-tint); }
+
+/* Dark diagram: same tokens, night paper. Follows the viewer theme. */
+.dark {
+  --paper: #141416; --card: #1c1c20; --ink: #ececec; --muted: #9a9aa3; --faint: #5f5f68;
+  --rule: #2f2f35; --edge: #74747e; --dot: rgba(255,255,255,.07);
+  --accent: #6b95ff; --accent-tint: rgba(107,149,255,.15);
+  --add: #3fbf74; --add-tint: rgba(63,191,116,.13); --del: #ff6b70; --del-tint: rgba(255,107,112,.11);
+  --hl-ink: #b9ccff; --add-ink: #9be3b8; --del-ink: #ffb0b2; --del-sub: #c77e80; --on-accent: #0c0c0e;
+  color-scheme: dark;
+}
+.dark .dia .grp { fill: rgba(255,255,255,.02); }
+/* A node picked in the viewer: accent ring outside the box. */
+.dia .sel .n-box { stroke-width: 2.5; filter: drop-shadow(0 0 0 var(--accent)) drop-shadow(0 0 6px color-mix(in srgb, var(--accent) 45%, transparent)); }

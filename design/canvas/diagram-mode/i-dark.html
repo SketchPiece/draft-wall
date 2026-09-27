@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="board" content="1280x800">
+<title>I. Тёмная тема</title>
+<link rel="stylesheet" href="_shared.css">
+<link rel="stylesheet" href="_viewer.css">
+</head>
+<body>
+<div class="stage">
+  <div class="bar" style="left:12px;top:12px"><b>Draftwall · push на Railway</b><span>3 борда · 1 диаграмма</span></div>
+  <div class="bar" style="right:12px;top:12px">Share&nbsp;&nbsp;<span>−&nbsp;&nbsp;</span>62%<span>&nbsp;&nbsp;+</span></div>
+
+  <div class="lbl" style="left:40px;top:98px">0. Now</div>
+  <div class="sheet" style="left:40px;top:120px;width:250px;height:172px"><div class="mini"><h4>Canvases</h4><div class="row">Room snap options <i>2 h</i></div><div class="row">Share dialog <i>1 d</i></div><div class="row">Railway migration <i>3 d</i></div></div></div>
+  <div class="lbl" style="left:40px;top:330px">A. Tabs by owner</div>
+  <div class="sheet" style="left:40px;top:352px;width:250px;height:172px"><div class="mini"><h4>Canvases</h4><div class="tabs"><span class="on">Mine</span><span>Shared</span></div><div class="row">Room snap options <i>2 h</i></div><div class="row">Share dialog <i>1 d</i></div></div></div>
+
+  <div class="lbl" style="left:340px;top:98px;right:120px"><span style="color:var(--v-text)">Push: CLI → Railway</span><span class="chip">◇ diagram · push.mmd</span></div>
+  <div class="sheet sel paper dark" style="left:340px;top:120px;width:820px;height:580px">
+    <svg class="dia" id="d" viewBox="0 0 1000 707" width="820" height="580"></svg>
+  </div>
+
+  <div class="ann" style="left:1010px;top:520px;transform:rotate(1.5deg)"><small>на узле «Access check»</small>А редактор тоже должен уметь push? Сейчас только владелец.</div>
+  <svg style="position:absolute;left:0;top:0;overflow:visible" width="1" height="1"><path d="M1030 522 C1010 470, 1010 430, 1060 402" fill="none" stroke="#f6de7b" stroke-width="2" stroke-dasharray="4 4"/><circle cx="1060" cy="402" r="5" fill="#f6de7b"/></svg>
+
+  <div class="tools"><i class="on">↖</i><i>✥</i><i>▭</i><i>◇</i></div>
+</div>
+<script src="_dia.js"></script>
+<script>
+flow(document.getElementById('d'), {
+  groups: [
+    { x: 30, y: 40, w: 300, h: 450, t: 'Your machine' },
+    { x: 400, y: 40, w: 570, h: 450, t: 'Railway' },
+  ],
+  nodes: {
+    files: { x: 70, y: 100, w: 220, h: 72, t: 'Canvas folder', s: '*.html · canvas.json', shape: 'store' },
+    cli: { x: 70, y: 300, w: 220, h: 60, t: 'canvas push', s: 'CLI · agent', shape: 'actor' },
+    api: { x: 440, y: 300, w: 220, h: 60, t: 'Hosted app', s: 'Hono on Node' },
+    access: { x: 720, y: 300, w: 220, h: 60, t: 'Access check', s: 'owner only', k: 'hl' },
+    vol: { x: 720, y: 96, w: 220, h: 76, t: 'Volume', s: '/data/<id>/state.json', shape: 'store' },
+    viewer: { x: 440, y: 580, w: 220, h: 60, t: 'Viewer', s: '/c/:id' },
+    you: { x: 70, y: 580, w: 220, h: 60, t: 'You', s: 'phone · Mac', shape: 'actor', k: 'ext' },
+  },
+  edges: [
+    ['files', 'cli', { t: 'reads' }],
+    ['cli', 'api', { t: 'PUT files/*', n: 1, k: 'hl' }],
+    ['api', 'access', { n: 2, k: 'hl' }],
+    ['access', 'vol', { t: 'commit', n: 3, k: 'hl' }],
+    ['you', 'viewer', { t: 'opens link' }],
+    ['viewer', 'api', { t: 'GET canvases/:id', k: 'dash' }],
+  ],
+});
+</script>
+</body>
+</html>

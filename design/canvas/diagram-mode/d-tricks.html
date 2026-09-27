@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="board" content="1280x800">
+<title>D. Приёмы</title>
+<link rel="stylesheet" href="_shared.css">
+<style>
+.wrap { display: grid; grid-template-columns: 440px 1fr; height: 800px; }
+.left { padding: 40px 32px 32px 44px; background: #fff; border-right: 1px solid var(--rule); display: flex; flex-direction: column; gap: 18px; }
+ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+li { display: grid; grid-template-columns: 112px 1fr; gap: 16px; align-items: center; }
+li svg { width: 112px; height: 56px; }
+li b { display: block; font-weight: 600; }
+li span { color: var(--muted); font-size: 14px; }
+li code { color: var(--accent); }
+.right { padding: 40px 44px 32px; display: flex; flex-direction: column; gap: 10px; }
+.legend { display: flex; gap: 22px; margin-top: auto; font-size: 14px; color: var(--muted); }
+.legend i { display: inline-block; width: 12px; height: 12px; margin-right: 7px; border-radius: 3px; vertical-align: -1px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="left">
+    <div class="eyebrow">Приёмы стиля</div>
+    <h1>Пять приёмов, все — обычный Mermaid</h1>
+    <ul>
+      <li><svg class="dia" id="t1" viewBox="0 0 224 112"></svg><p><b>Путь</b><span><code>:::hl</code> красит узлы и рёбра, о которых речь</span></p></li>
+      <li><svg class="dia" id="t2" viewBox="0 0 224 112"></svg><p><b>Шаги</b><span>метка <code>1. PUT</code> становится номером</span></p></li>
+      <li><svg class="dia" id="t3" viewBox="0 0 224 112"></svg><p><b>Зоны</b><span><code>subgraph</code> — тихая пунктирная рамка</span></p></li>
+      <li><svg class="dia" id="t4" viewBox="0 0 224 112"></svg><p><b>Внешнее</b><span><code>:::ext</code> — не наше, приглушено</span></p></li>
+      <li><svg class="dia" id="t5" viewBox="0 0 224 112"></svg><p><b>Было → стало</b><span><code>:::add</code> <code>:::del</code>, или две версии файла</span></p></li>
+    </ul>
+  </div>
+  <div class="right paper">
+    <div class="eyebrow">Пример: что поменял последний коммит</div>
+    <h1>Переезд с Vercel на Railway</h1>
+    <svg class="dia" id="d" viewBox="0 0 900 600" width="720" height="480" style="margin-top:18px"></svg>
+    <div class="legend"><span><i style="background:var(--add)"></i>появилось</span><span><i style="background:var(--del)"></i>ушло</span><span><i style="border:1.5px dashed var(--muted)"></i>внешнее</span></div>
+  </div>
+</div>
+<script src="_dia.js"></script>
+<script>
+const $ = id => document.getElementById(id);
+flow($('t1'), { nodes: { a: { x: 4, y: 34, w: 80, h: 44, t: 'A', k: 'hl' }, b: { x: 140, y: 34, w: 80, h: 44, t: 'B', k: 'hl' } }, edges: [['a', 'b', { k: 'hl' }]] });
+flow($('t2'), { nodes: { a: { x: 4, y: 34, w: 70, h: 44, t: 'A' }, b: { x: 150, y: 34, w: 70, h: 44, t: 'B' } }, edges: [['a', 'b', { n: 1, k: 'hl' }]] });
+flow($('t3'), { groups: [{ x: 2, y: 2, w: 220, h: 108, t: 'Railway' }], nodes: { a: { x: 30, y: 44, w: 164, h: 44, t: 'App' } } });
+flow($('t4'), { nodes: { a: { x: 4, y: 34, w: 80, h: 44, t: 'App' }, b: { x: 124, y: 34, w: 96, h: 44, t: 'Google', k: 'ext' } }, edges: [['a', 'b', { k: 'dash' }]] });
+flow($('t5'), { nodes: { a: { x: 6, y: 34, w: 90, h: 44, t: 'Blob', k: 'del' }, b: { x: 120, y: 34, w: 90, h: 44, t: 'Disk', k: 'add' } } });
+flow($('d'), {
+  nodes: {
+    cli: { x: 10, y: 262, w: 180, h: 56, t: 'canvas push', s: 'CLI', shape: 'actor' },
+    vfn: { x: 290, y: 90, w: 220, h: 60, t: 'Vercel Functions', s: 'api/*.ts', k: 'del' },
+    blob: { x: 600, y: 82, w: 210, h: 76, t: 'Vercel Blob', s: 'canvases/*.json', shape: 'store', k: 'del' },
+    g: { x: 600, y: 262, w: 210, h: 56, t: 'Google OAuth', k: 'ext' },
+    rail: { x: 290, y: 432, w: 220, h: 60, t: 'Railway service', s: 'Hono · server.ts', k: 'add' },
+    vol: { x: 600, y: 424, w: 210, h: 76, t: 'Volume', s: '/data', shape: 'store', k: 'add' },
+  },
+  edges: [
+    ['cli', 'vfn', { a: 'r', b: 'l', k: 'del' }],
+    ['vfn', 'blob', { k: 'del' }],
+    ['cli', 'rail', { a: 'r', b: 'l', k: 'add' }],
+    ['rail', 'vol', { k: 'add' }],
+    ['rail', 'g', { a: 't', b: 'l', k: 'dash', t: 'sign-in' }],
+    ['blob', 'vol', { a: 'r', b: 'r', mid: 860, k: 'add', t: 'migrate-blob.ts', at: [860, 372] }],
+  ],
+});
+</script>
+</body>
+</html>

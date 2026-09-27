@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="board" content="1280x800">
+<title>C. Один стиль, четыре вида</title>
+<link rel="stylesheet" href="_shared.css">
+<style>
+.grid { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; height: 800px; }
+.cell { position: relative; display: flex; flex-direction: column; gap: 6px; padding: 28px 32px 20px; border-right: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
+.cell:nth-child(2n) { border-right: 0; } .cell:nth-child(n+3) { border-bottom: 0; }
+.cell header { display: flex; align-items: baseline; justify-content: space-between; }
+.cell svg { margin: auto; }
+</style>
+</head>
+<body class="paper">
+<div class="grid">
+  <section class="cell">
+    <header><h2>Схема потока</h2><span class="eyebrow">flowchart</span></header>
+    <p class="muted">Кто кого вызывает. Группы — зоны, синий — путь, о котором речь.</p>
+    <svg class="dia" id="f" viewBox="0 0 700 250" width="560" height="200"></svg>
+  </section>
+  <section class="cell">
+    <header><h2>Последовательность</h2><span class="eyebrow">sequenceDiagram</span></header>
+    <p class="muted">Вход через CLI: кто кому что отправляет и в каком порядке.</p>
+    <svg class="dia" id="s" viewBox="0 0 700 330" width="530" height="250"></svg>
+  </section>
+  <section class="cell">
+    <header><h2>Состояния</h2><span class="eyebrow">stateDiagram</span></header>
+    <p class="muted">Жизнь стикера: кто его видит и когда он исчезает.</p>
+    <svg class="dia" id="st" viewBox="0 0 700 250" width="560" height="200"></svg>
+  </section>
+  <section class="cell">
+    <header><h2>Данные</h2><span class="eyebrow">erDiagram</span></header>
+    <p class="muted">Что лежит на томе: состояние канваса и доступ к нему.</p>
+    <svg class="dia" id="er" viewBox="0 0 700 250" width="560" height="200"></svg>
+  </section>
+</div>
+<script src="_dia.js"></script>
+<script>
+flow(document.getElementById('f'), {
+  groups: [{ x: 250, y: 10, w: 440, h: 230, t: 'Railway' }],
+  nodes: {
+    cli: { x: 20, y: 100, w: 170, h: 50, t: 'canvas push', shape: 'actor' },
+    api: { x: 280, y: 100, w: 170, h: 50, t: 'Hosted app', k: 'hl' },
+    vol: { x: 500, y: 60, w: 170, h: 60, t: 'Volume', shape: 'store' },
+    g: { x: 500, y: 170, w: 170, h: 50, t: 'Google OAuth', k: 'ext' },
+  },
+  edges: [
+    ['cli', 'api', { t: 'push', k: 'hl' }],
+    ['api', 'vol', { a: 't', b: 'l', k: 'hl' }],
+    ['api', 'g', { a: 'b', b: 'l', k: 'dash' }],
+  ],
+});
+seq(document.getElementById('s'), {
+  top: 4, step: 50,
+  lanes: [
+    { id: 'cli', t: 'CLI', x: 90, w: 150, shape: 'actor' },
+    { id: 'app', t: 'Hosted app', x: 360, w: 170, k: 'hl' },
+    { id: 'g', t: 'Google', x: 610, w: 150, k: 'ext' },
+  ],
+  acts: [{ lane: 'app', from: 0, to: 3 }],
+  rows: [
+    ['cli', 'app', 'GET /auth/cli', { n: 1 }],
+    ['app', 'g', 'consent screen', { n: 2 }],
+    ['g', 'app', 'code', { k: 'dash', n: 3 }],
+    ['app', 'cli', 'bearer token', { k: 'hl', n: 4 }],
+  ],
+});
+flow(document.getElementById('st'), {
+  nodes: {
+    d: { x: 10, y: 100, w: 150, h: 50, t: 'Draft', s: 'on the phone' },
+    p: { x: 270, y: 100, w: 150, h: 50, t: 'On canvas', s: 'owner sees it', k: 'hl' },
+    r: { x: 530, y: 30, w: 160, h: 50, t: 'Pulled', s: 'in canvas.json' },
+    x: { x: 530, y: 170, w: 160, h: 50, t: 'Resolved', s: 'deleted', k: 'ext' },
+  },
+  edges: [
+    ['d', 'p', { t: 'place', k: 'hl' }],
+    ['p', 'r', { a: 'r', b: 'l', t: 'canvas pull', k: 'hl' }],
+    ['r', 'x', { a: 'b', b: 't', t: 'fixed' }],
+  ],
+});
+flow(document.getElementById('er'), {
+  nodes: {
+    s: { x: 10, y: 10, w: 230, t: 'State', rows: ['id:string', 'title:string', 'files:map', 'canvas:Canvas'] },
+    a: { x: 330, y: 34, w: 230, t: 'Access', rows: ['owner:email', 'epoch:number'], k: 'hl' },
+    m: { x: 330, y: 168, w: 230, t: 'Member', rows: ['email:string', 'role:viewer|editor'] },
+  },
+  edges: [
+    ['s', 'a', { a: 'r', b: 'l', t: '1 : 1' }],
+    ['a', 'm', { a: 'b', b: 't', t: '1 : n' }],
+  ],
+});
+</script>
+</body>
+</html>

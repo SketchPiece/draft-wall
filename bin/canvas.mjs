@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 // Canvas CLI. A canvas is a folder of HTML boards plus canvas.json (same format as Claude Desktop canvases).
+// Mermaid files (*.mmd) are diagram boards: the viewer draws them in the draftwall diagram style.
 //   canvas sync   <dir> [--title "…"]    lay out new boards in canvas.json, keep placed ones
 //   canvas serve  <dir> [--port 4870]    view locally with live reload
 //   canvas push   <dir> [--id <id>]      upload to the hosted canvas, print its URL
@@ -17,7 +18,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash, randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { applyLayout, BOARD_CSP, contentType, injectBridge, validId, validPath } from '../src/shared.js';
+import { applyLayout, BOARD_CSP, contentType, injectBridge, inlineScripts, isDiagram, validId, validPath } from '../src/shared.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const CONFIG = path.join(os.homedir(), '.config', 'canvas', 'config.json');
@@ -27,7 +28,8 @@ const GAP_X = 80, GAP_Y = 160;
 const MAX_FILE = 4.4 * 1024 * 1024; // Vercel request body limit is 4.5 MB
 
 const die = msg => { console.error(msg); process.exit(1); };
-const isBoard = f => /\.html?$/i.test(f) && !/^[_.]/.test(f) && !f.includes('/');
+const isBoard = f => /\.(html?|mmd)$/i.test(f) && !/^[_.]/.test(f) && !f.includes('/');
+const baseName = f => f.replace(/\.(html?|mmd)$/i, '');
 const decode = s => s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 const readJson = (file, fallback) => { try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return fallback; } };
 const writeJson = (file, value) => fs.writeFileSync(file, JSON.stringify(value, null, 1) + '\n');
@@ -35,6 +37,13 @@ const writeJson = (file, value) => fs.writeFileSync(file, JSON.stringify(value, 
 // ---------- layout ----------
 function readMeta(file) {
   const src = fs.readFileSync(file, 'utf8').slice(0, 16384);
+  if (isDiagram(file)) {
+    // Mermaid front matter: title, and draftwall's own board size ("board: 1600x900").
+    const front = /^---\r?\n([\s\S]*?)\r?\n---/.exec(src)?.[1] ?? '';
+    const title = /^\s*title\s*:\s*(.+?)\s*$/m.exec(front)?.[1].replace(/^["']|["']$/g, '');
+    const size = /^\s*board\s*:\s*(\d+)\s*[x×]\s*(\d+)\s*$/m.exec(front);
+    return { title: title || undefined, w: size ? +size[1] : undefined, h: size ? +size[2] : undefined };
+  }
   const title = src.match(/<title[^>]*>([^<]*)<\/title>/i)?.[1].trim();
   const size = src.match(/<meta\s+name=["']board["']\s+content=["']\s*(\d+)\s*[x×]\s*(\d+)\s*["']/i);
   return { title: title ? decode(title) : undefined, w: size ? +size[1] : undefined, h: size ? +size[2] : undefined };
@@ -71,7 +80,7 @@ function sync(dir, title) {
     const i = all.indexOf(f), m = meta[f];
     doc.boards[f] = {
       x: (i % cols) * (cellW + GAP_X), y: Math.floor(i / cols) * (cellH + GAP_Y),
-      w: m.w ?? DEFAULT_SIZE[0], h: m.h ?? DEFAULT_SIZE[1], title: m.title ?? f.replace(/\.html?$/i, ''),
+      w: m.w ?? DEFAULT_SIZE[0], h: m.h ?? DEFAULT_SIZE[1], title: m.title ?? baseName(f),
     };
     doc.order.push(f);
   }
@@ -117,7 +126,10 @@ function serve(dir, port, title) {
     let p;
     try { p = decodeURIComponent(new URL(req.url, 'http://local').pathname); } catch { return send(400); }
     if (p === '/') return send(302, '', { location: '/c/local' });
-    if (p === '/c/local') return send(200, fs.readFileSync(path.join(ROOT, 'web', 'viewer.html')), { 'content-type': 'text/html; charset=utf-8' });
+    if (p === '/c/local') {
+      const web = f => fs.readFileSync(path.join(ROOT, 'web', f), 'utf8');
+      return send(200, inlineScripts(web('viewer.html'), { theme: web('theme.js'), diagram: web('diagram.js') }), { 'content-type': 'text/html; charset=utf-8' });
+    }
     if (p === '/api/canvases/local' && req.method === 'GET') {
       try { return send(200, JSON.stringify(state()), { 'content-type': 'application/json' }); } catch (e) { return send(500, JSON.stringify({ error: e.message })); }
     }
@@ -276,8 +288,10 @@ function printNotes(doc) {
   if (!notes.length) { console.log('No sticky notes.'); return; }
   console.log(`${notes.length} sticky note${notes.length === 1 ? '' : 's'}:`);
   for (const a of notes) {
-    const b = nearestBoard(doc, a);
-    const where = b ? `${b.on ? 'on' : 'near'} "${b.title}" (${b.f})` : 'on the canvas';
+    const b = nearestBoard(doc, a), pin = a.to && doc.boards?.[a.to.board];
+    const where = pin ? (a.to.node != null ? `pinned to node "${a.to.label || a.to.node}" (id ${a.to.node}) in "${pin.title || a.to.board}" (${a.to.board})`
+      : `pinned to "${pin.title || a.to.board}" (${a.to.board}) at ${a.to.x},${a.to.y}`)
+      : b ? `${b.on ? 'on' : 'near'} "${b.title}" (${b.f})` : 'on the canvas';
     console.log(`- [${a.id}${a.color ? ', ' + a.color : ''}] ${where}: ${a.text.replace(/\n/g, '\n    ')}`);
   }
 }
@@ -303,6 +317,13 @@ async function push(dir, idFlag) {
     printNotes({ ...doc, annotations: added });
   }
 
+  // Hand-placed diagram nodes are kept like board positions: the hosted canvas has the latest ones.
+  for (const [f, b] of Object.entries(doc.boards ?? {})) {
+    const nodes = remote?.canvas.boards?.[f]?.nodes;
+    if (isDiagram(f) && nodes) b.nodes = { ...nodes, ...b.nodes };
+  }
+  await checkDiagrams(root, doc);
+
   const files = {};
   const uploads = [];
   for (const rel of walk(root)) {
@@ -326,6 +347,17 @@ async function push(dir, idFlag) {
   }
 }
 
+// Reads every diagram board the way the viewer will and reports what it can't draw.
+async function checkDiagrams(root, doc) {
+  const list = Object.keys(doc.boards ?? {}).filter(isDiagram);
+  if (!list.length) return;
+  await import('../web/diagram.js');
+  for (const f of list) {
+    const d = globalThis.draftwallDiagram.parse(fs.readFileSync(path.join(root, f), 'utf8'));
+    for (const e of d.errors) console.warn(`${f}:${e.line}: ${e.msg}`);
+  }
+}
+
 async function pull(dir) {
   const root = path.resolve(dir);
   const sidecar = readJson(path.join(root, REMOTE), {});
@@ -334,7 +366,12 @@ async function pull(dir) {
   if (!remote) die(`Canvas ${sidecar.id} is not on the server.`);
   const file = path.join(root, 'canvas.json');
   const doc = readJson(file, { boards: {} });
-  for (const [f, b] of Object.entries(remote.canvas.boards ?? {})) if (doc.boards[f]) { doc.boards[f].x = b.x; doc.boards[f].y = b.y; }
+  for (const [f, b] of Object.entries(remote.canvas.boards ?? {})) {
+    const local = doc.boards[f];
+    if (!local) continue;
+    local.x = b.x; local.y = b.y;
+    if (b.nodes) local.nodes = b.nodes; else delete local.nodes;
+  }
   doc.annotations = remote.canvas.annotations ?? [];
   writeJson(file, doc);
   writeJson(path.join(root, REMOTE), { ...sidecar, seen: doc.annotations.map(a => a.id) });

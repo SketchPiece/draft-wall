@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="board" content="1280x800">
+<title>G. Борд переворачивается в текст</title>
+<link rel="stylesheet" href="_shared.css">
+<link rel="stylesheet" href="_viewer.css">
+<style>
+.flip { padding: 34px 40px; background: var(--paper); height: 100%; }
+.flip .src { font-size: 15px; line-height: 1.75; }
+.flip .src .on { background: var(--accent-tint); }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="bar" style="left:12px;top:12px"><b>Draftwall · push на Railway</b><span>3 борда · 1 диаграмма</span></div>
+  <div class="bar" style="right:12px;top:12px">Share&nbsp;&nbsp;<span>−&nbsp;&nbsp;</span>62%<span>&nbsp;&nbsp;+</span></div>
+
+  <div class="lbl" style="left:40px;top:98px">0. Now</div>
+  <div class="sheet" style="left:40px;top:120px;width:250px;height:172px"><div class="mini"><h4>Canvases</h4><div class="row">Room snap options <i>2 h</i></div><div class="row">Share dialog <i>1 d</i></div><div class="row">Railway migration <i>3 d</i></div></div></div>
+  <div class="lbl" style="left:40px;top:330px">A. Tabs by owner</div>
+  <div class="sheet" style="left:40px;top:352px;width:250px;height:172px"><div class="mini"><h4>Canvases</h4><div class="tabs"><span class="on">Mine</span><span>Shared</span></div><div class="row">Room snap options <i>2 h</i></div><div class="row">Share dialog <i>1 d</i></div></div></div>
+
+  <div class="lbl" style="left:340px;top:92px;width:820px"><span style="color:var(--v-text)">Push: CLI → Railway</span><span class="chip">◇ diagram</span>
+    <span class="btns"><span class="seg"><span>Схема</span><span class="on">Текст</span></span><span class="btn">⤢</span></span></div>
+  <div class="sheet sel" style="left:340px;top:126px;width:820px;height:580px">
+    <div class="flip"><pre class="src" id="src"></pre></div>
+  </div>
+
+  <div class="tools"><i class="on">↖</i><i>✥</i><i>▭</i></div>
+</div>
+<script src="_push.js"></script>
+<script>listing(document.getElementById('src'), 11);</script>
+</body>
+</html>

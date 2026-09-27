@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="board" content="1280x800">
+<title>F. Текст в панели сбоку</title>
+<link rel="stylesheet" href="_shared.css">
+<link rel="stylesheet" href="_viewer.css">
+</head>
+<body>
+<div class="stage">
+  <div class="bar" style="left:12px;top:12px"><b>Draftwall · push на Railway</b><span>3 борда · 1 диаграмма</span></div>
+  <div class="bar" style="right:12px;top:12px">Share&nbsp;&nbsp;<span>−&nbsp;&nbsp;</span>48%<span>&nbsp;&nbsp;+</span></div>
+
+  <div class="lbl" style="left:28px;top:118px">0. Now</div>
+  <div class="sheet" style="left:28px;top:140px;width:190px;height:132px"><div class="mini"><h4>Canvases</h4><div class="row">Room snap <i>2 h</i></div><div class="row">Share dialog <i>1 d</i></div></div></div>
+  <div class="lbl" style="left:28px;top:318px">A. Tabs by owner</div>
+  <div class="sheet" style="left:28px;top:340px;width:190px;height:132px"><div class="mini"><h4>Canvases</h4><div class="tabs"><span class="on">Mine</span><span>Shared</span></div><div class="row">Room snap <i>2 h</i></div></div></div>
+
+  <div class="lbl" style="left:250px;top:114px;width:590px"><span style="color:var(--v-text)">Push: CLI → Railway</span><span class="chip">◇ diagram</span>
+    <span class="btns"><span class="btn on">&lt;/&gt; Текст</span><span class="btn">⤢</span></span></div>
+  <div class="sheet sel paper" style="left:250px;top:146px;width:590px;height:417px">
+    <svg class="dia" id="d" viewBox="0 0 1000 707" width="590" height="417"></svg>
+  </div>
+
+  <div class="panel" style="right:12px;top:60px;bottom:74px;width:408px">
+    <header><b>push.mmd</b><span class="sp"></span><span class="pbtn">Копировать</span><span class="x">×</span></header>
+    <div class="body"><pre class="src" id="src"></pre></div>
+    <footer>Выбран узел <b style="color:var(--v-text)">Access check</b> — строка 11. Клик по строке подсвечивает узел.</footer>
+  </div>
+
+  <div class="tools"><i class="on">↖</i><i>✥</i><i>▭</i></div>
+</div>
+<script src="_dia.js"></script>
+<script src="_push.js"></script>
+<script>
+flow(document.getElementById('d'), PUSH('access'));
+listing(document.getElementById('src'), 11);
+</script>
+</body>
+</html>

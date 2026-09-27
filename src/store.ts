@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 //   c/<id>/files/<path>    board HTML and assets as pushed
 export type Canvas = {
   title?: string;
-  boards: Record<string, { x: number; y: number; w: number; h: number; title?: string }>;
+  boards: Record<string, { x: number; y: number; w: number; h: number; title?: string; nodes?: Record<string, [number, number]> }>;
   order?: string[];
   notes?: Record<string, unknown>;
   annotations?: Annotation[];

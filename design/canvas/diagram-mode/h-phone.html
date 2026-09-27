@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="board" content="390x844">
+<title>H. Телефон: текст снизу</title>
+<link rel="stylesheet" href="_shared.css">
+<link rel="stylesheet" href="_viewer.css">
+<style>
+html, body { width: 390px; height: 844px; }
+.top { position: absolute; left: 0; right: 0; top: 0; height: 100px; padding: 54px 10px 0; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--v-line); background: var(--v-bg); }
+.top .back { font-weight: 500; padding: 0 8px; } .top .t { flex: 1; color: var(--v-muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.top .btn { display: inline-flex; align-items: center; height: 30px; padding: 0 10px; border-radius: 8px; background: #262626; font: 500 12px var(--mono); color: var(--v-text); }
+.pic { position: absolute; left: 12px; right: 12px; top: 116px; height: 262px; border-radius: 2px; overflow: hidden; }
+.sheet2 { position: absolute; left: 0; right: 0; bottom: 0; height: 450px; background: var(--v-panel); border-top: 1px solid var(--v-line); border-radius: 16px 16px 0 0; box-shadow: 0 -10px 30px rgba(0,0,0,.5); }
+.grab { width: 36px; height: 5px; border-radius: 3px; background: #3a3a3a; margin: 8px auto 4px; }
+.sheet2 header { display: flex; align-items: center; justify-content: space-between; padding: 6px 16px 10px; border-bottom: 1px solid var(--v-line); }
+.sheet2 header b { font: 500 14px var(--mono); }
+.sheet2 .pbtn { height: 30px; padding: 0 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.14); font-size: 13px; display: inline-flex; align-items: center; }
+.sheet2 .src { padding: 10px 14px; font-size: 12px; line-height: 1.7; color: #d6d6da; }
+.sheet2 .src .k { color: #c49bff; } .sheet2 .src .s { color: #7fd6a4; } .sheet2 .src .c { color: #5a5a62; } .sheet2 .src .a { color: #8fb0ff; } .sheet2 .src .ln { color: #4a4a52; width: 2em; }
+.sheet2 .src .on { background: rgba(52,107,241,.22); box-shadow: -14px 0 0 rgba(52,107,241,.22), 14px 0 0 rgba(52,107,241,.22); }
+</style>
+</head>
+<body>
+<div class="stage">
+  <div class="top"><span class="back">‹ Canvas</span><span class="t">Push: CLI → Railway</span><span class="btn">&lt;/&gt;</span></div>
+  <div class="pic paper"><svg class="dia" id="d" viewBox="0 0 1000 707" width="366" height="259"></svg></div>
+  <div class="sheet2">
+    <div class="grab"></div>
+    <header><b>push.mmd</b><span class="pbtn">Копировать</span></header>
+    <pre class="src" id="src"></pre>
+  </div>
+</div>
+<script src="_dia.js"></script>
+<script src="_push.js"></script>
+<script>
+flow(document.getElementById('d'), PUSH('access'));
+listing(document.getElementById('src'), 11);
+</script>
+</body>
+</html>

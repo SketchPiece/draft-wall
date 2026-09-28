@@ -7,6 +7,7 @@ import {
 } from './auth.js';
 import { atLeast, canCreate, levelOf, parseCreators, parseMembers, type Level } from './access.js';
 import { applyLayout, BOARD_CSP, contentType, injectBridge, validId, validPath } from './shared.js';
+import { ensureBaseline, record, serial } from './history.js';
 import * as store from './store.js';
 
 type Env = { Variables: { email: string } };
@@ -76,7 +77,7 @@ app.get('/f/:id/:key/*', async c => {
   const { id, key } = c.req.param();
   const path = decodeURIComponent(c.req.path.split('/').slice(4).join('/'));
   if (!validId(id) || !validPath(path)) return c.notFound();
-  const [access, file] = await Promise.all([store.readAccess(id), store.getFile(id, path)]);
+  const [access, file] = await Promise.all([store.readAccess(id), store.getFile(id, path, c.req.query('v'))]);
   if (key !== fileKey(id, access?.epoch) || !file) return c.notFound();
   const type = contentType(path);
   const headers: Record<string, string> = {
@@ -161,7 +162,8 @@ api.put('/canvases/:id/files/*', async c => {
   const id = c.req.param('id');
   const path = decodeURIComponent(c.req.path.split('/files/').slice(1).join('/files/'));
   if (!validPath(path)) return c.json({ error: `Bad file path: ${path}` }, 400);
-  await store.putFile(id, path, await c.req.arrayBuffer());
+  const body = await c.req.arrayBuffer();
+  await serial(id, async () => { await ensureBaseline(id); await store.putFile(id, path, body); });
   return c.body(null, 204);
 });
 
@@ -172,23 +174,76 @@ api.post('/canvases/:id/commit', async c => {
   const body = await c.req.json<{ canvas: store.Canvas; files: Record<string, string> }>();
   if (!body?.canvas || typeof body.canvas.boards !== 'object' || typeof body.files !== 'object') return c.json({ error: 'canvas and files are required' }, 400);
   if (!Object.keys(body.files).every(validPath)) return c.json({ error: 'Bad file path in manifest' }, 400);
-  const prev = await store.readState(id);
-  await store.deleteFiles(id, Object.keys(prev?.files ?? {}).filter(p => !(p in body.files)));
-  const state: store.State = { id, title: body.canvas.title ?? id, updatedAt: Date.now(), files: body.files, canvas: body.canvas };
-  await store.writeState(state);
+  if (!Object.values(body.files).every(store.validHash)) return c.json({ error: 'Bad file hash in manifest' }, 400);
+  const state = await serial(id, async () => {
+    await ensureBaseline(id);
+    const prev = await store.readState(id);
+    await store.deleteFiles(id, Object.keys(prev?.files ?? {}).filter(p => !(p in body.files)));
+    const state: store.State = { id, title: body.canvas.title ?? id, updatedAt: Date.now(), files: body.files, canvas: body.canvas };
+    await store.writeState(state);
+    await record(prev, state, c.get('email'), 'push');
+    return state;
+  });
   return c.json({ url: new URL(`/c/${id}`, c.req.url).toString(), updatedAt: state.updatedAt });
 });
 
 // Viewer: board positions and sticky notes.
 api.put('/canvases/:id/layout', async c => {
+  const { id, email, denied } = await gate(c, 'editor');
+  if (denied) return denied;
+  const body = await c.req.json();
+  const state = await serial(id, async () => {
+    await ensureBaseline(id);
+    const state = await store.readState(id);
+    if (!state) return null;
+    const prev = structuredClone(state);
+    applyLayout(state.canvas, body);
+    state.updatedAt = Date.now();
+    await store.writeState(state);
+    await record(prev, state, email, 'edit');
+    return state;
+  });
+  if (!state) return c.json({ error: 'Canvas not found' }, 404);
+  return c.json({ updatedAt: state.updatedAt });
+});
+
+// History: every push and every edit in the viewer, newest first, for the people who may edit.
+api.get('/canvases/:id/history', async c => {
   const { id, denied } = await gate(c, 'editor');
   if (denied) return denied;
-  const state = await store.readState(id);
-  if (!state) return c.json({ error: 'Canvas not found' }, 404);
-  applyLayout(state.canvas, await c.req.json());
-  state.updatedAt = Date.now();
-  await store.writeState(state);
-  return c.json({ updatedAt: state.updatedAt });
+  const list = await store.readHistory(id);
+  return c.json({ versions: list.reverse() }, 200, { 'cache-control': 'no-store' });
+});
+
+api.get('/canvases/:id/history/:v', async c => {
+  const { id, denied } = await gate(c, 'editor');
+  if (denied) return denied;
+  const v = Number(c.req.param('v')), entry = (await store.readHistory(id)).find(x => x.v === v);
+  const body = entry && await store.readVersion(id, v);
+  if (!entry || !body) return c.json({ error: 'No such version' }, 404);
+  return c.json({ ...entry, ...body });
+});
+
+// Taking the canvas back to a version is itself a new version, so a restore can be undone too.
+// Editors may restore a version with the same files as now (layout and notes); files need the owner.
+api.post('/canvases/:id/history/:v/restore', async c => {
+  const { id, email, level, denied } = await gate(c, 'editor');
+  if (denied) return denied;
+  const v = Number(c.req.param('v'));
+  const res = await serial(id, async () => {
+    const [list, body, prev] = await Promise.all([store.readHistory(id), store.readVersion(id, v), store.readState(id)]);
+    const entry = list.find(x => x.v === v);
+    if (!entry || !body || !prev) return { error: 'No such version', status: 404 as const };
+    if (!atLeast(level, 'owner') && JSON.stringify(body.files) !== JSON.stringify(prev.files)) {
+      return { error: 'This version has other board files; only the owner can bring them back', status: 403 as const };
+    }
+    const files = await store.restoreFiles(id, body.files, prev.files);
+    const state: store.State = { id, title: body.title, updatedAt: Date.now(), files, canvas: body.canvas };
+    await store.writeState(state);
+    await record(prev, state, email, 'restore', { from: v, summary: `Restored version ${v}` });
+    return { updatedAt: state.updatedAt };
+  });
+  return 'error' in res ? c.json({ error: res.error }, res.status) : c.json(res);
 });
 
 // Sharing: who else may open the canvas, by email or by domain ("@company.com").

@@ -28,6 +28,7 @@ export const injectBridge = html => /<\/body>/i.test(html) ? html.replace(/<\/bo
 // Applied to board files opened directly (new tab); the viewer also sandboxes its iframes.
 export const BOARD_CSP = 'sandbox allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-modals';
 
+const NOTE_KINDS = new Set(['title1', 'title2', 'text']);
 const ANNOTATION_KEYS = new Set(['id', 'x', 'y', 'w', 'text', 'page', 'kind', 'size', 'bold', 'italic', 'color', 'to']);
 
 /** @param {string} f */
@@ -74,6 +75,20 @@ export function applyLayout(canvas, body) {
         if (pin) out.to = pin; else delete out.to;
         return out;
       });
+  }
+  // Headings and text on the canvas ("notes"): moved, edited, added or removed in the viewer. Fields the viewer
+  // doesn't know about (Claude Desktop's) stay as they were.
+  if (body?.notes && typeof body.notes === 'object' && !Array.isArray(body.notes)) {
+    const prev = canvas.notes ?? {};
+    canvas.notes = Object.fromEntries(Object.entries(body.notes)
+      .filter(([k, n]) => /^[\w-]{1,40}$/.test(k) && n && Number.isFinite(n.x) && Number.isFinite(n.y) && typeof n.text === 'string')
+      .slice(0, 200)
+      .map(([k, n]) => {
+        const out = { ...prev[k], x: Math.round(n.x), y: Math.round(n.y), text: n.text.slice(0, 2000) };
+        if (NOTE_KINDS.has(n.kind)) out.kind = n.kind;
+        if (Number.isFinite(n.maxW) && n.maxW > 0) out.maxW = Math.round(n.maxW); else delete out.maxW;
+        return [k, out];
+      }));
   }
   return canvas;
 }

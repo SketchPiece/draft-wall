@@ -70,6 +70,12 @@ svg { display: block; flex: none; }
 .note.title1 { font-size: 72px; line-height: 1.1; font-weight: 700; }
 .note.title2 { font-size: 44px; line-height: 1.15; font-weight: 650; }
 .note.text { font-size: 24px; line-height: 1.45; font-weight: 400; color: var(--muted); letter-spacing: 0; }
+body:not(.readonly) .note { cursor: default; }
+.note.selected { outline: calc(2px / var(--z)) solid var(--accent); outline-offset: calc(6px / var(--z)); border-radius: 2px; }
+.note.empty-text { color: var(--faint); }
+.note textarea { display: block; min-width: 240px; margin: 0; padding: 0; border: 0; outline: 0; resize: none; overflow: hidden;
+  background: transparent; color: inherit; font: inherit; line-height: inherit; letter-spacing: inherit; white-space: pre-wrap; user-select: text; -webkit-user-select: text; }
+#stage.text { cursor: text; }
 
 /* Sticky notes (canvas.json "annotations"). Paper colors stay the same in both themes. */
 .ann { position: absolute; z-index: 2; rotate: var(--tilt, 0deg); transform-origin: 50% 0; min-height: 120px; padding: 18px 20px 22px; border-radius: 3px; color: #1d1b16;
@@ -127,10 +133,11 @@ svg { display: block; flex: none; }
 #ann-bar .dot { width: 20px; height: 20px; margin: 0 2px; border-radius: 50%; box-shadow: inset 0 0 0 1px rgba(0,0,0,.15); }
 #ann-bar .dot[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
 #ann-bar .del:hover { color: var(--danger); }
+#ann-bar .kind { width: auto; min-width: 28px; padding: 0 6px; font-weight: 600; font-size: 12px; }
 
 #empty { position: fixed; inset: 0; display: grid; place-items: center; color: var(--muted); pointer-events: none; text-align: center; line-height: 1.6; }
 #empty a { color: var(--text); pointer-events: auto; }
-body.readonly [data-tool="sticky"], body.readonly #tools .sep { display: none; }
+body.readonly [data-tool="sticky"], body.readonly [data-tool="text"], body.readonly #tools .sep { display: none; }
 
 #share-btn { width: auto; padding: 0 8px 0 10px; gap: 6px; display: flex; align-items: center; color: var(--text); font-weight: 500; }
 #share-btn svg { width: 14px; height: 14px; }
@@ -326,9 +333,15 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
   <button class="ibtn" data-tool="sticky" aria-pressed="false" title="Sticky note (S)" aria-label="Sticky note">
     <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M3 3.5a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 .5.5V11l-4 4H3.5a.5.5 0 0 1-.5-.5v-11Z"/><path d="M15 11h-3.5a.5.5 0 0 0-.5.5V15"/></svg>
   </button>
+  <button class="ibtn" data-tool="text" aria-pressed="false" title="Text (T)" aria-label="Text">
+    <svg viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M3.5 4.5V3h11v1.5M9 3v12M6.5 15h5"/></svg>
+  </button>
 </div>
 
 <div class="bar" id="ann-bar" hidden>
+  <button class="ibtn kind" data-kind="title1" title="Title" aria-label="Title">H1</button>
+  <button class="ibtn kind" data-kind="title2" title="Subtitle" aria-label="Subtitle">H2</button>
+  <button class="ibtn kind" data-kind="text" title="Text" aria-label="Text">T</button>
   <button class="dot" data-color="" style="background:#f6de7b" aria-label="Yellow"></button>
   <button class="dot" data-color="green" style="background:#bfe6b4" aria-label="Green"></button>
   <button class="dot" data-color="blue" style="background:#bcd6fb" aria-label="Blue"></button>
@@ -415,6 +428,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
   const ICON_PIN = '<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9.5 2.5l4 4-2 1-2.5 2.5.5 2.5-1 1-7-7 1-1 2.5.5L7.5 3.5zM2.5 13.5l3-3"/></svg>';
   const DG = window.draftwallDiagram;
   const isDiagram = f => /\.mmd$/i.test(f);
+  const NOTE_KINDS = ['title1', 'title2', 'text'];
 
   const id = decodeURIComponent((location.pathname.match(/^\/c\/([^/]+)/) || [])[1] || 'local');
   const API = '/api/canvases/' + encodeURIComponent(id);
@@ -422,7 +436,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
   let data = null, doc = null;
   let view = { x: 0, y: 0, z: 1 }, sel = null, tool = 'select', space = false;
   let focusFile = null, focusFit = true, focusZoom = 1;
-  let editing = null, saving = false, saveTimer = null, busy = false;
+  let editing = null, editingNote = null, saving = false, saveTimer = null, busy = false;
   let canEdit = true; // viewers only look: no notes, no moving boards
   const boardEls = new Map();
   const diagrams = new Map(); // file -> { url, src, model, lay, svg, key, err }
@@ -504,7 +518,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     $('#title').textContent = doc.title || 'Canvas';
     const fs = files();
     $('#count').textContent = fs.length === 1 ? '1 board' : `${fs.length} boards`;
-    $('#empty').hidden = fs.length > 0 || doc.annotations.length > 0;
+    $('#empty').hidden = fs.length > 0 || doc.annotations.length > 0 || Object.keys(doc.notes).length > 0;
     $('#empty').textContent = 'No boards yet';
     for (const [f, el] of boardEls) if (!doc.boards[f]) { el.remove(); boardEls.delete(f); }
     for (const f of fs) {
@@ -518,21 +532,28 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     }
     for (const f of diagrams.keys()) if (!doc.boards[f]) diagrams.delete(f);
     if (srcFile && !doc.boards[srcFile]) closeSource();
-    world.querySelectorAll('.note').forEach(n => n.remove());
-    for (const n of Object.values(doc.notes ?? {})) {
-      const el = document.createElement('div');
-      el.className = 'note ' + (['title1', 'title2', 'text'].includes(n.kind) ? n.kind : 'text');
-      el.textContent = n.text ?? '';
-      Object.assign(el.style, { left: (n.x ?? 0) + 'px', top: (n.y ?? 0) + 'px' });
-      if (n.maxW) el.style.maxWidth = n.maxW + 'px';
-      world.appendChild(el);
-    }
+    renderNotes();
     renderAnns();
     renderPanel();
     markSelection();
     if (focusFile && !doc.boards[focusFile]) closeFocus();
     else if (focusFile) layoutFocus();
     if (srcFile) renderSource();
+  }
+  // Headings and text on the canvas (canvas.json "notes"); anyone who may edit moves and rewrites them.
+  function renderNotes() {
+    world.querySelectorAll('.note:not(.editing)').forEach(n => n.remove());
+    for (const [nid, n] of Object.entries(doc.notes)) {
+      if (editingNote === nid) continue;
+      const el = document.createElement('div');
+      el.className = 'note ' + (NOTE_KINDS.includes(n.kind) ? n.kind : 'text');
+      el.dataset.nid = nid;
+      el.textContent = n.text || 'Empty text';
+      el.classList.toggle('empty-text', !n.text);
+      Object.assign(el.style, { left: (n.x ?? 0) + 'px', top: (n.y ?? 0) + 'px' });
+      if (n.maxW) el.style.maxWidth = n.maxW + 'px';
+      world.appendChild(el);
+    }
   }
   function renderAnns() {
     world.querySelectorAll('.ann:not(.editing)').forEach(n => n.remove());
@@ -615,16 +636,19 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
   function markSelection() {
     for (const [f, el] of boardEls) el.classList.toggle('selected', sel?.type === 'board' && sel.id === f);
     world.querySelectorAll('.ann').forEach(el => el.classList.toggle('selected', sel?.type === 'ann' && sel.id === el.dataset.id));
+    world.querySelectorAll('.note').forEach(el => el.classList.toggle('selected', sel?.type === 'note' && sel.id === el.dataset.nid));
     $('#panel-list').querySelectorAll('button').forEach(b => b.setAttribute('aria-current', String(sel?.type === 'board' && sel.id === b.dataset.file)));
     placeAnnBar();
   }
   function placeAnnBar() {
     const bar = $('#ann-bar');
-    const a = sel?.type === 'ann' && doc && ann(sel.id);
+    const a = doc && (sel?.type === 'ann' ? ann(sel.id) : sel?.type === 'note' ? doc.notes[sel.id] : null);
     if (!a || busy || !canEdit) { bar.hidden = true; return; }
     bar.hidden = false;
-    bar.querySelectorAll('.dot').forEach(d => d.setAttribute('aria-pressed', String((a.color || '') === d.dataset.color)));
-    $('#ann-unpin').hidden = !a.to;
+    const isNote = sel.type === 'note';
+    bar.querySelectorAll('.dot').forEach(d => { d.hidden = isNote; d.setAttribute('aria-pressed', String((a.color || '') === d.dataset.color)); });
+    bar.querySelectorAll('.kind').forEach(k => { k.hidden = !isNote; k.setAttribute('aria-pressed', String((a.kind || 'text') === k.dataset.kind)); });
+    $('#ann-unpin').hidden = isNote || !a.to;
     const x = a.x * view.z + view.x, y = a.y * view.z + view.y;
     bar.style.left = clamp(x, 8, innerWidth - bar.offsetWidth - 8) + 'px';
     bar.style.top = clamp(y - 48, 8 + topInset(), innerHeight - 52) + 'px';
@@ -639,15 +663,15 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     if (!r.ok) { $('#empty').hidden = false; $('#empty').textContent = r.status === 404 ? 'Canvas not found' : 'Canvas didn’t load'; return; }
     const next = await r.json();
     if (!first && data && next.updatedAt === data.updatedAt) return;
-    if (!first && (busy || editing || saving || saveTimer)) return;
+    if (!first && (busy || editing || editingNote || saving || saveTimer)) return;
     data = next; doc = data.canvas;
     canEdit = !data.role || data.role !== 'viewer';
     document.body.classList.toggle('readonly', !canEdit);
-    if (!canEdit && tool === 'sticky') setTool('select');
+    if (!canEdit && (tool === 'sticky' || tool === 'text')) setTool('select');
     $('#share-btn').hidden = data.role !== 'owner';
     doc.boards ??= {}; doc.order ??= Object.keys(doc.boards); doc.notes ??= {}; doc.annotations ??= [];
     for (const f of Object.keys(doc.boards)) if (!doc.order.includes(f)) doc.order.push(f);
-    if (sel?.type === 'ann' && !ann(sel.id)) sel = null;
+    if ((sel?.type === 'ann' && !ann(sel.id)) || (sel?.type === 'note' && !doc.notes[sel.id])) sel = null;
     render();
     if (first) {
       const v = store.get(viewKey);
@@ -676,7 +700,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
       saveTimer = null; saving = true;
       const boards = Object.fromEntries(files().map(f => [f, { x: doc.boards[f].x, y: doc.boards[f].y, ...(isDiagram(f) ? { nodes: doc.boards[f].nodes ?? {} } : {}) }]));
       try {
-        const r = await fetch(API + '/layout', { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ boards, annotations: doc.annotations }) });
+        const r = await fetch(API + '/layout', { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ boards, annotations: doc.annotations, notes: doc.notes }) });
         if (!r.ok) throw new Error(r.status === 401 ? 'signed out' : 'server error');
         data.updatedAt = (await r.json()).updatedAt;
       } catch (err) { toast('Not saved: ' + err.message); }
@@ -724,6 +748,51 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     if (a && !a.text) { doc.annotations = doc.annotations.filter(x => x !== a); if (sel?.id === aid) sel = null; }
     renderAnns(); markSelection(); save();
   }
+  // ---------- headings and text ----------
+  function createText(wx, wy) {
+    let n = 1; while (doc.notes['text-' + n]) n++;
+    const nid = 'text-' + n;
+    doc.notes[nid] = { x: Math.round(wx), y: Math.round(wy - 18), text: '', kind: 'text' };
+    renderNotes(); select({ type: 'note', id: nid }); setTool('select');
+    editNote(nid);
+    $('#empty').hidden = true;
+  }
+  function editNote(nid) {
+    if (!canEdit) return;
+    const n = doc.notes[nid], el = world.querySelector(`.note[data-nid="${CSS.escape(nid)}"]`);
+    if (!n || !el) return;
+    const px = parseFloat(getComputedStyle(el).fontSize);
+    if (px * view.z < 14) { const r = el.getBoundingClientRect(); zoomAt(16 / px, r.left + r.width / 2, r.top + r.height / 2); }
+    const w = el.offsetWidth;
+    editingNote = nid; el.classList.add('editing'); el.classList.remove('empty-text');
+    el.textContent = '';
+    const ta = document.createElement('textarea');
+    ta.value = n.text ?? ''; ta.setAttribute('aria-label', 'Text');
+    ta.style.width = Math.max(w, 240) + 'px';
+    const grow = () => { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; };
+    ta.addEventListener('input', grow);
+    ta.addEventListener('keydown', e => { if (e.key === 'Escape' || (e.key === 'Enter' && (e.metaKey || e.ctrlKey))) { e.preventDefault(); ta.blur(); } });
+    ta.addEventListener('blur', finishNoteEdit);
+    el.appendChild(ta); grow(); ta.focus(); ta.select();
+    placeAnnBar();
+  }
+  function finishNoteEdit() {
+    if (!editingNote) return;
+    const nid = editingNote, n = doc.notes[nid], el = world.querySelector('.note.editing'), ta = el?.querySelector('textarea');
+    editingNote = null;
+    if (n && ta) n.text = ta.value.replace(/\s+$/, '');
+    el?.remove();
+    if (n && !n.text) { delete doc.notes[nid]; if (sel?.id === nid) sel = null; }
+    renderNotes(); markSelection(); save();
+  }
+  function deleteNote(nid) {
+    if (!canEdit) return;
+    if (editingNote === nid) { editingNote = null; world.querySelector('.note.editing')?.remove(); }
+    delete doc.notes[nid];
+    if (sel?.id === nid) sel = null;
+    renderNotes(); markSelection(); save();
+  }
+
   function deleteAnn(aid) {
     if (!canEdit) return;
     doc.annotations = doc.annotations.filter(a => a.id !== aid);
@@ -732,6 +801,17 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
   }
   $('#ann-bar').addEventListener('pointerdown', e => e.preventDefault()); // keep the textarea focused
   $('#ann-bar').addEventListener('click', e => {
+    if (sel?.type === 'note') {
+      const n = doc.notes[sel.id]; if (!n) return;
+      const k = e.target.closest('.kind');
+      if (k) {
+        n.kind = k.dataset.kind;
+        const el = world.querySelector(`.note[data-nid="${CSS.escape(sel.id)}"]`);
+        if (el) { el.classList.remove(...NOTE_KINDS); el.classList.add(n.kind); el.querySelector('textarea')?.dispatchEvent(new Event('input')); }
+        placeAnnBar(); save();
+      } else if (e.target.closest('#ann-del')) deleteNote(sel.id);
+      return;
+    }
     const a = sel?.type === 'ann' && ann(sel.id); if (!a) return;
     const dot = e.target.closest('.dot');
     if (dot) {
@@ -749,6 +829,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     document.querySelectorAll('#tools [data-tool]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.tool === t)));
     stage.classList.toggle('hand', t === 'hand');
     stage.classList.toggle('sticky', t === 'sticky');
+    stage.classList.toggle('text', t === 'text');
   }
   $('#tools').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (b) setTool(b.dataset.tool); });
 
@@ -758,6 +839,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
   stage.addEventListener('pointerdown', e => {
     if (e.target.closest('.label button, .label a, textarea')) return;
     if (editing) finishEdit();
+    if (editingNote) finishNoteEdit();
     try { stage.setPointerCapture(e.pointerId); } catch {}
     pts.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pts.size === 2) {
@@ -768,6 +850,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     if (pts.size > 2 || (e.button !== 0 && e.button !== 1)) return;
     const annEl = e.target.closest('.ann'), board = e.target.closest('.board');
     g = { kind: 'press', sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y, ann: annEl?.dataset.id, board: board?.dataset.file,
+      note: e.target.closest('.note')?.dataset.nid,
       node: annEl ? null : e.target.closest('.dgm .n[data-id]')?.dataset.id,
       touch: e.pointerType !== 'mouse', forcePan: e.button === 1 || space || tool === 'hand', mode: null };
   });
@@ -786,6 +869,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
       if (Math.hypot(dx, dy) < (g.touch ? 8 : 4)) return;
       if (g.forcePan) g.mode = 'pan';
       else if (g.ann && canEdit) { g.mode = 'ann'; const a = ann(g.ann); g.ax = a.x; g.ay = a.y; select({ type: 'ann', id: g.ann }); }
+      else if (g.note && canEdit && tool === 'select') { g.mode = 'note'; const n = doc.notes[g.note]; g.ax = n.x; g.ay = n.y; select({ type: 'note', id: g.note }); }
       else if (g.node && !g.touch && tool === 'select' && canEdit && diagrams.get(g.board)?.model?.type === 'flow') startNodeDrag(g);
       else if (g.board && !g.touch && tool === 'select' && canEdit) {
         g.mode = 'board'; const b = doc.boards[g.board]; g.bx = b.x; g.by = b.y; select({ type: 'board', id: g.board });
@@ -800,6 +884,9 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
       const a = ann(g.ann); a.x = Math.round(g.ax + dx / view.z); a.y = Math.round(g.ay + dy / view.z);
       const el = world.querySelector(`.ann[data-id="${CSS.escape(a.id)}"]`); el.style.left = a.x + 'px'; el.style.top = a.y + 'px';
       renderThreads();
+    } else if (g.mode === 'note') {
+      const n = doc.notes[g.note]; n.x = Math.round(g.ax + dx / view.z); n.y = Math.round(g.ay + dy / view.z);
+      const el = world.querySelector(`.note[data-nid="${CSS.escape(g.note)}"]`); el.style.left = n.x + 'px'; el.style.top = n.y + 'px';
     } else if (g.mode === 'board') {
       const b = doc.boards[g.board]; b.x = Math.round((g.bx + dx / view.z) / 10) * 10; b.y = Math.round((g.by + dy / view.z) / 10) * 10;
       const el = boardEls.get(g.board); el.style.left = b.x + 'px'; el.style.top = b.y + 'px';
@@ -834,7 +921,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     if (!pts.delete(e.pointerId) || !g) return;
     if (g.kind === 'pinch') { if (pts.size === 0) g = null; return; }
     const done = g; g = null; busy = false; stage.classList.remove('grabbing');
-    if (done.mode === 'ann' || done.mode === 'board') save();
+    if (done.mode === 'ann' || done.mode === 'board' || done.mode === 'note') save();
     if (done.mode === 'node') { paintDiagram(done.board, null, true); save(); if (srcFile === done.board) renderSource(); }
     if (!done.mode && e.type === 'pointerup') tap(done, e);
     placeAnnBar();
@@ -843,12 +930,14 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
   stage.addEventListener('pointercancel', endPointer);
 
   function tap(t, e) {
-    const key = t.ann ? 'a:' + t.ann : t.board ? 'b:' + t.board : 'bg';
+    const key = t.ann ? 'a:' + t.ann : t.note ? 'n:' + t.note : t.board ? 'b:' + t.board : 'bg';
     const now = performance.now(), dbl = lastTap && lastTap.key === key && now - lastTap.t < 350 && Math.hypot(e.clientX - lastTap.x, e.clientY - lastTap.y) < 24;
     lastTap = dbl ? null : { key, t: now, x: e.clientX, y: e.clientY };
     if (tool === 'sticky' && !t.ann) { const w = toWorld(e.clientX, e.clientY); createAnn(w.x, w.y, pinAt(t, e)); return; }
+    if (tool === 'text' && !t.ann) { if (t.note) { select({ type: 'note', id: t.note }); setTool('select'); editNote(t.note); } else { const w = toWorld(e.clientX, e.clientY); createText(w.x, w.y); } return; }
     if (tool === 'hand') return;
     if (t.ann) { select({ type: 'ann', id: t.ann }); if (dbl) editAnn(t.ann); }
+    else if (t.note) { select({ type: 'note', id: t.note }); if (dbl) editNote(t.note); }
     else if (t.board) {
       select({ type: 'board', id: t.board });
       if (isDiagram(t.board)) {
@@ -995,6 +1084,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
   // ---------- full-size view ----------
   function openFocus(f) {
     if (editing) finishEdit();
+    if (editingNote) finishNoteEdit();
     focusFile = f; focusFit = true; select({ type: 'board', id: f });
     const url = fileUrl(f);
     $('#focus-iframe').hidden = isDiagram(f); $('#focus-dg').hidden = !isDiagram(f);
@@ -1114,11 +1204,14 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     const k = e.key.toLowerCase();
     if (e.key === 'Escape') { select(null); setTool('select'); if (!$('#share').hidden) toggleShare(); if (srcFile) closeSource(); }
     else if ((e.key === 'Backspace' || e.key === 'Delete') && sel?.type === 'ann') deleteAnn(sel.id);
+    else if ((e.key === 'Backspace' || e.key === 'Delete') && sel?.type === 'note') deleteNote(sel.id);
     else if (e.key === 'Enter' && sel?.type === 'ann') { e.preventDefault(); editAnn(sel.id); }
+    else if (e.key === 'Enter' && sel?.type === 'note') { e.preventDefault(); editNote(sel.id); }
     else if (e.key === 'Enter' && sel?.type === 'board') openFocus(sel.id);
     else if (k === 'v') setTool('select');
     else if (k === 'h') setTool('hand');
     else if ((k === 's' || k === 'n') && canEdit) setTool('sticky');
+    else if (k === 't' && canEdit) setTool('text');
     else if (k === 'b') togglePanel();
     else if (e.shiftKey && e.code === 'Digit1') fitAll();
     else if (e.shiftKey && e.code === 'Digit2' && sel?.type === 'board') fitBoard(sel.id);

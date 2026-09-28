@@ -4,7 +4,7 @@
 //   canvas sync   <dir> [--title "…"]    lay out new boards in canvas.json, keep placed ones
 //   canvas serve  <dir> [--port 4870]    view locally with live reload
 //   canvas push   <dir> [--id <id>]      upload to the hosted canvas, print its URL
-//   canvas pull   <dir>                  bring sticky notes and board positions back from the hosted canvas
+//   canvas pull   <dir>                  bring sticky notes, headings and board positions back from the hosted canvas
 //   canvas share  <dir|id> [add <email|@domain> [--role viewer|editor] | rm <email|@domain>]
 //   canvas list | canvas rm <id>
 //   canvas login | logout <email> | accounts [--default <email>]   Google accounts the CLI acts as
@@ -373,6 +373,7 @@ async function pull(dir) {
     if (b.nodes) local.nodes = b.nodes; else delete local.nodes;
   }
   doc.annotations = remote.canvas.annotations ?? [];
+  if (remote.canvas.notes) doc.notes = remote.canvas.notes;
   writeJson(file, doc);
   writeJson(path.join(root, REMOTE), { ...sidecar, seen: doc.annotations.map(a => a.id) });
   printNotes(doc);

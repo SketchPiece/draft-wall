@@ -171,6 +171,25 @@ body.readonly [data-tool="sticky"], body.readonly [data-tool="text"], body.reado
 #share-public input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #share-copy { margin-top: 8px; height: 28px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--line-2); color: var(--text); }
 #share-copy:hover { background: var(--hover); }
+/* History: every push and edit, newest first; picking one shows the canvas as it was */
+#history { position: fixed; z-index: 6; right: 12px; top: calc(56px + var(--top)); width: min(340px, calc(100vw - 24px)); max-height: calc(100% - 140px - var(--top));
+  display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--chrome-shadow); }
+#history h2 { margin: 0; padding: 12px 12px 8px; font-size: 13px; font-weight: 600; }
+#history ol { list-style: none; margin: 0; padding: 0 6px 6px; overflow: auto; }
+#history li button { display: block; width: 100%; padding: 7px 8px; border-radius: 7px; text-align: left; }
+#history li button:hover { background: var(--hover); }
+#history li button[aria-current="true"] { background: var(--pressed); }
+#history .s { display: block; color: var(--text); overflow-wrap: anywhere; }
+#history .m { display: block; margin-top: 1px; color: var(--faint); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#history .now { color: var(--accent); }
+#history .empty { padding: 4px 8px 10px; color: var(--muted); }
+#preview-bar { left: 50%; bottom: calc(14px + var(--bottom)); transform: translateX(-50%); height: 44px; padding: 0 6px 0 14px; gap: 8px; max-width: calc(100vw - 24px); }
+#preview-bar span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+#preview-bar span b { color: var(--text); font-weight: 600; }
+#preview-bar button { flex: none; height: 32px; padding: 0 12px; border-radius: 8px; border: 1px solid var(--line-2); font-weight: 500; }
+#preview-bar button:hover { background: var(--hover); }
+#preview-bar #preview-restore { border-color: transparent; background: var(--accent); color: var(--accent-fg, #fff); }
+#preview-bar #preview-restore:hover { background: var(--accent); filter: brightness(1.1); }
 #toast { position: fixed; left: 50%; bottom: calc(72px + var(--bottom)); transform: translateX(-50%); z-index: 9; max-width: calc(100vw - 32px); padding: 8px 12px;
   background: var(--panel); border: 1px solid var(--line-2); border-radius: 9px; color: var(--text); box-shadow: var(--chrome-shadow); }
 
@@ -312,6 +331,9 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
   <button class="ibtn" id="theme-btn" title="Theme" aria-label="Theme">
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2a6 6 0 1 0 0 12c.9 0 1.3-.6 1.3-1.2 0-.9-.8-1.2-.8-2 0-.7.5-1.1 1.2-1.1H11a3 3 0 0 0 3-3C14 4.1 11.3 2 8 2Z"/><circle cx="5" cy="7.2" r=".6" fill="currentColor"/><circle cx="7.2" cy="4.9" r=".6" fill="currentColor"/><circle cx="10.3" cy="5.2" r=".6" fill="currentColor"/></svg>
   </button>
+  <button class="ibtn" id="history-btn" hidden aria-expanded="false" aria-controls="history" title="History" aria-label="History">
+    <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.6 8a5.4 5.4 0 1 0 1.6-3.8M2.5 2.4v2.4h2.4"/><path d="M8 5.2V8l1.9 1.3"/></svg>
+  </button>
   <button class="ibtn" id="share-btn" hidden aria-expanded="false" aria-controls="share" title="Share"><span class="lbl">Share</span>
     <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 2.5 14 7.2 9 11.9V9.3h-.8c-2.7 0-4.6 1.2-6 3.5 0-5 2.4-7.7 6-7.7H9Z"/></svg>
   </button>
@@ -382,6 +404,17 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
   <button type="button" id="share-copy">Copy link</button>
 </section>
 
+<section id="history" hidden aria-labelledby="history-title">
+  <h2 id="history-title">History</h2>
+  <ol id="history-list"></ol>
+</section>
+
+<div class="bar" id="preview-bar" hidden role="status">
+  <span id="preview-text"></span>
+  <button type="button" id="preview-restore">Restore</button>
+  <button type="button" id="preview-close">Close</button>
+</div>
+
 <section id="src" hidden aria-label="Diagram text">
   <header><span id="src-name"></span><button type="button" class="tbtn" id="src-copy">Copy</button>
     <button type="button" class="ibtn" id="src-close" title="Close (Esc)" aria-label="Close">
@@ -447,6 +480,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
   let focusFile = null, focusFit = true, focusZoom = 1;
   let editing = null, editingNote = null, saving = false, saveTimer = null, busy = false;
   let canEdit = true; // viewers only look: no notes, no moving boards
+  let preview = null, live = null; // an older version being looked at (read-only), and the current canvas to go back to
   const boardEls = new Map();
   const diagrams = new Map(); // file -> { url, src, model, lay, svg, key, err }
   let srcFile = null, picked = null; // diagram whose text is open; nodes/edges/lines picked in it
@@ -672,23 +706,29 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     if (!r.ok) { $('#empty').hidden = false; $('#empty').textContent = r.status === 404 ? 'Canvas not found' : 'Canvas didn’t load'; return; }
     const next = await r.json();
     if (!first && data && next.updatedAt === data.updatedAt) return;
-    if (!first && (busy || editing || editingNote || saving || saveTimer)) return;
-    data = next; doc = data.canvas;
-    canEdit = !data.role || data.role !== 'viewer';
-    document.body.classList.toggle('readonly', !canEdit);
-    if (!canEdit && (tool === 'sticky' || tool === 'text')) setTool('select');
-    $('#share-btn').hidden = data.role !== 'owner';
-    if (id !== 'local' && !data.email) $('#home').hidden = true; // opened from a public link, signed out
-    doc.boards ??= {}; doc.order ??= Object.keys(doc.boards); doc.notes ??= {}; doc.annotations ??= [];
-    for (const f of Object.keys(doc.boards)) if (!doc.order.includes(f)) doc.order.push(f);
-    if ((sel?.type === 'ann' && !ann(sel.id)) || (sel?.type === 'note' && !doc.notes[sel.id])) sel = null;
-    render();
+    if (!first && (busy || editing || editingNote || saving || saveTimer || preview)) return;
+    show(next);
+    if (!$('#history').hidden) loadHistory();
     if (first) {
       const v = store.get(viewKey);
       if (v && isFinite(v.z) && Math.abs((v.vw ?? 0) - innerWidth) < 120) { view = { x: v.x, y: v.y, z: v.z }; apply(); } else fitAll();
       const f = location.hash && decodeURIComponent(location.hash.slice(1));
       if (f && doc.boards[f]) openFocus(f);
     }
+  }
+  function show(next) {
+    data = next; doc = data.canvas;
+    canEdit = !preview && (!data.role || data.role !== 'viewer');
+    document.body.classList.toggle('readonly', !canEdit);
+    if (!canEdit && (tool === 'sticky' || tool === 'text')) setTool('select');
+    $('#share-btn').hidden = data.role !== 'owner';
+    $('#history-btn').hidden = id === 'local' || !['editor', 'owner'].includes(data.role);
+    $('#tools').hidden = !!preview;
+    if (id !== 'local' && !data.email) $('#home').hidden = true; // opened from a public link, signed out
+    doc.boards ??= {}; doc.order ??= Object.keys(doc.boards); doc.notes ??= {}; doc.annotations ??= [];
+    for (const f of Object.keys(doc.boards)) if (!doc.order.includes(f)) doc.order.push(f);
+    if ((sel?.type === 'ann' && !ann(sel.id)) || (sel?.type === 'note' && !doc.notes[sel.id])) sel = null;
+    render();
   }
   function denied(email) {
     const el = $('#empty'); el.hidden = false;
@@ -1178,6 +1218,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
   }
   async function toggleShare() {
     const p = $('#share'), open = p.hidden;
+    if (open && !$('#history').hidden) toggleHistory();
     p.hidden = !open; $('#share-btn').setAttribute('aria-expanded', String(open));
     if (!open) return;
     const r = await fetch(API + '/access', { cache: 'no-store', credentials: 'same-origin' });
@@ -1197,6 +1238,76 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     try { await navigator.clipboard.writeText(location.origin + location.pathname); toast('Link copied'); } catch { toast(location.origin + location.pathname); }
   });
 
+  // ---------- history ----------
+  let versions = [];
+  const when = t => {
+    const d = new Date(t), today = new Date().toDateString() === d.toDateString();
+    const hm = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    return today ? hm : d.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) + ', ' + hm;
+  };
+  const who = x => x.kind === 'initial' ? 'Before history was kept' : (x.kind === 'push' ? 'Pushed by ' : '') + (x.by || 'someone');
+  const what = x => {
+    if (x.kind === 'restore') { const f = versions.find(y => y.v === x.from); return f ? `Restored the version from ${when(f.at)}` : x.summary; }
+    return x.summary || (x.kind === 'initial' ? 'The canvas as it was' : 'Changed');
+  };
+  async function loadHistory() {
+    const r = await fetch(API + '/history', { cache: 'no-store', credentials: 'same-origin' });
+    if (!r.ok) { toast('History didn’t load'); return; }
+    versions = (await r.json()).versions;
+    renderHistory();
+  }
+  function renderHistory() {
+    const list = $('#history-list'); list.textContent = '';
+    if (!versions.length) { list.innerHTML = '<li class="empty">No changes yet. Every push and edit will show up here.</li>'; return; }
+    versions.forEach((x, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = '<button type="button"><span class="s"></span><span class="m"></span></button>';
+      li.querySelector('.s').textContent = what(x);
+      li.querySelector('.m').textContent = `${when(x.at)} · ${who(x)}`;
+      if (i === 0) li.querySelector('.m').insertAdjacentHTML('afterbegin', '<span class="now">Current</span> · ');
+      const b = li.querySelector('button');
+      b.setAttribute('aria-current', String(preview ? preview.v === x.v : i === 0));
+      b.addEventListener('click', () => (i === 0 ? closeVersion() : openVersion(x.v)));
+      list.appendChild(li);
+    });
+  }
+  function toggleHistory() {
+    const p = $('#history'), open = p.hidden;
+    if (open && !$('#share').hidden) toggleShare();
+    p.hidden = !open; $('#history-btn').setAttribute('aria-expanded', String(open));
+    if (open) loadHistory();
+  }
+  async function openVersion(v) {
+    if (editing) finishEdit();
+    if (editingNote) finishNoteEdit();
+    const r = await fetch(API + '/history/' + v, { cache: 'no-store', credentials: 'same-origin' });
+    if (!r.ok) { toast('That version didn’t load'); return; }
+    const ver = await r.json();
+    live ??= data; preview = ver; sel = null;
+    show({ ...live, canvas: structuredClone(ver.canvas), files: ver.files, title: ver.title });
+    $('#preview-text').innerHTML = '<b></b> · <span></span>';
+    $('#preview-text b').textContent = when(ver.at);
+    $('#preview-text span').textContent = what(ver);
+    // Editors bring back layout and notes; a version with other board files needs the owner.
+    $('#preview-restore').hidden = !(live.role === 'owner' || JSON.stringify(ver.files) === JSON.stringify(live.files));
+    $('#preview-bar').hidden = false;
+    renderHistory();
+  }
+  function closeVersion() {
+    if (!preview) return;
+    preview = null; $('#preview-bar').hidden = true;
+    const d = live; live = null; sel = null;
+    show(d); renderHistory(); load(false);
+  }
+  $('#history-btn').addEventListener('click', toggleHistory);
+  $('#preview-close').addEventListener('click', closeVersion);
+  $('#preview-restore').addEventListener('click', async () => {
+    const v = preview?.v; if (!v) return;
+    const r = await fetch(API + `/history/${v}/restore`, { method: 'POST', credentials: 'same-origin' });
+    if (!r.ok) { toast('Not restored: ' + ((await r.json().catch(() => null))?.error ?? 'server error')); return; }
+    closeVersion(); toast('Restored'); loadHistory();
+  });
+
   let toastTimer;
   function toast(msg) { const t = $('#toast'); t.textContent = msg; t.hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, 3200); }
 
@@ -1214,7 +1325,10 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.code === 'Space' && !space) { space = true; stage.classList.add('hand'); e.preventDefault(); return; }
     const k = e.key.toLowerCase();
-    if (e.key === 'Escape') { select(null); setTool('select'); if (!$('#share').hidden) toggleShare(); if (srcFile) closeSource(); }
+    if (e.key === 'Escape') {
+      select(null); setTool('select'); if (!$('#share').hidden) toggleShare(); if (srcFile) closeSource();
+      if (preview) closeVersion(); else if (!$('#history').hidden) toggleHistory();
+    }
     else if ((e.key === 'Backspace' || e.key === 'Delete') && sel?.type === 'ann') deleteAnn(sel.id);
     else if ((e.key === 'Backspace' || e.key === 'Delete') && sel?.type === 'note') deleteNote(sel.id);
     else if (e.key === 'Enter' && sel?.type === 'ann') { e.preventDefault(); editAnn(sel.id); }

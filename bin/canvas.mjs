@@ -5,7 +5,7 @@
 //   canvas serve  <dir> [--port 4870]    view locally with live reload
 //   canvas push   <dir> [--id <id>]      upload to the hosted canvas, print its URL
 //   canvas pull   <dir>                  bring sticky notes, headings and board positions back from the hosted canvas
-//   canvas share  <dir|id> [add <email|@domain> [--role viewer|editor] | rm <email|@domain>]
+//   canvas share  <dir|id> [add <email|@domain> [--role viewer|editor] | rm <email|@domain> | public on|off]
 //   canvas list | canvas rm <id>
 //   canvas login | logout <email> | accounts [--default <email>]   Google accounts the CLI acts as
 //   canvas project [<dir>] [--account <email>] [--share "a@b.com:editor,@company.com"|none]
@@ -261,14 +261,16 @@ async function share(target) {
   const cur = await call(account, 'GET', `/api/canvases/${id}/access`);
   if (!cur) die(`Canvas ${id} is not on the server.`);
   const [, , op, who] = args._;
-  let members = cur.members;
-  if (op === 'add' || op === 'rm') {
+  let members = cur.members, isPublic = !!cur.public;
+  if (op === 'public' && (who === 'on' || who === 'off')) {
+    isPublic = (await call(account, 'PUT', `/api/canvases/${id}/access`, JSON.stringify({ public: who === 'on' }), { 'content-type': 'application/json' })).public;
+  } else if (op === 'add' || op === 'rm') {
     const entry = parseShare(`${who ?? ''}:${str(args.role) ?? 'viewer'}`)[0];
     members = members.filter(m => m.email !== entry.email);
     if (op === 'add') members.push(entry);
     members = (await call(account, 'PUT', `/api/canvases/${id}/access`, JSON.stringify({ members }), { 'content-type': 'application/json' })).members;
-  } else if (op) die('Usage: canvas share <dir|id> [add <email|@domain> [--role viewer|editor] | rm <email|@domain>]');
-  console.log(`${id}: owner ${cur.owner ?? '(admins)'}; shared with ${shareText(members)}`);
+  } else if (op) die('Usage: canvas share <dir|id> [add <email|@domain> [--role viewer|editor] | rm <email|@domain> | public on|off]');
+  console.log(`${id}: owner ${cur.owner ?? '(admins)'}; shared with ${shareText(members)}${isPublic ? '; anyone with the link can view' : ''}`);
 }
 
 const slug = s => s.toLowerCase().normalize('NFKD').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'canvas';

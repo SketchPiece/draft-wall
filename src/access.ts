@@ -11,11 +11,13 @@ export const validRole = (s: unknown): s is Role => s === 'viewer' || s === 'edi
 const matches = (entry: string, email: string) => entry === email || entry === '@' + email.split('@')[1];
 
 // Admins own every canvas, including ones pushed before access lists existed (no access.json).
+// email is '' for someone not signed in, who gets in only when the canvas is public.
 export function levelOf(access: Access | null, email: string): Level | null {
-  if (isAdmin(email)) return 'owner';
+  if (email && isAdmin(email)) return 'owner';
   if (!access) return null;
-  if (access.owner === email) return 'owner';
-  let best: Level | null = null;
+  if (email && access.owner === email) return 'owner';
+  let best: Level | null = access.public ? 'viewer' : null;
+  if (!email) return best;
   for (const m of access.members) if (matches(m.email, email) && !atLeast(best, m.role)) best = m.role;
   return best;
 }

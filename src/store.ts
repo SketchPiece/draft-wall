@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 // Layout on disk under CANVAS_DATA_DIR (a Railway volume in production, ./data locally):
 //   settings.json          { creators: ["a@b.com", "@company.com"] }
 //   c/<id>/state.json      { id, title, updatedAt, files: { path: hash }, canvas }
-//   c/<id>/access.json     { owner, epoch, members: [{ email, role }] }, apart from state so pushes and layout saves can't drop it
+//   c/<id>/access.json     { owner, epoch, members: [{ email, role }], public? }, apart from state so pushes and layout saves can't drop it
 //   c/<id>/files/<path>    board HTML and assets as pushed
 export type Canvas = {
   title?: string;
@@ -18,7 +18,8 @@ export type Annotation = { id: string; x: number; y: number; w: number; text: st
 export type State = { id: string; title: string; updatedAt: number; files: Record<string, string>; canvas: Canvas };
 export type Role = 'viewer' | 'editor';
 // A member is one email or a whole domain ("@company.com").
-export type Access = { owner: string; epoch: number; members: { email: string; role: Role }[] };
+// public: anyone with the link may view, signed in or not.
+export type Access = { owner: string; epoch: number; members: { email: string; role: Role }[]; public?: boolean };
 export type Settings = { creators: string[] };
 
 const ROOT = process.env.CANVAS_DATA_DIR ?? 'data';

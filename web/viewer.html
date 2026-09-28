@@ -161,6 +161,14 @@ body.readonly [data-tool="sticky"], body.readonly [data-tool="text"], body.reado
 #share li .r { color: var(--faint); padding-right: 8px; }
 #share li select { height: 26px; padding: 0 22px 0 6px; background-position: right 5px center; }
 #share li .ibtn:hover { color: var(--danger); }
+#share-public { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); cursor: pointer; }
+#share-public span { flex: 1; }
+#share-public small { display: block; color: var(--muted); font-size: 12px; }
+#share-public input { appearance: none; -webkit-appearance: none; flex: none; width: 32px; height: 18px; margin: 0; border-radius: 9px; background: var(--line-2); position: relative; cursor: pointer; transition: background .12s; }
+#share-public input::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: translate .12s; }
+#share-public input:checked { background: var(--accent); }
+#share-public input:checked::after { translate: 14px 0; }
+#share-public input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 #share-copy { margin-top: 8px; height: 28px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--line-2); color: var(--text); }
 #share-copy:hover { background: var(--hover); }
 #toast { position: fixed; left: 50%; bottom: calc(72px + var(--bottom)); transform: translateX(-50%); z-index: 9; max-width: calc(100vw - 32px); padding: 8px 12px;
@@ -370,6 +378,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     <button type="submit">Add</button>
   </form>
   <ul id="share-list"></ul>
+  <label id="share-public"><span>Anyone with the link<small>Can view without signing in</small></span><input type="checkbox" id="share-public-on" role="switch"></label>
   <button type="button" id="share-copy">Copy link</button>
 </section>
 
@@ -669,6 +678,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     document.body.classList.toggle('readonly', !canEdit);
     if (!canEdit && (tool === 'sticky' || tool === 'text')) setTool('select');
     $('#share-btn').hidden = data.role !== 'owner';
+    if (id !== 'local' && !data.email) $('#home').hidden = true; // opened from a public link, signed out
     doc.boards ??= {}; doc.order ??= Object.keys(doc.boards); doc.notes ??= {}; doc.annotations ??= [];
     for (const f of Object.keys(doc.boards)) if (!doc.order.includes(f)) doc.order.push(f);
     if ((sel?.type === 'ann' && !ann(sel.id)) || (sel?.type === 'note' && !doc.notes[sel.id])) sel = null;
@@ -1144,14 +1154,15 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
   // ---------- sharing (owner only) ----------
   let access = null;
   const ROLES = { viewer: 'Can view', editor: 'Can comment' };
-  async function saveAccess(members) {
-    const r = await fetch(API + '/access', { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ members }) });
+  async function saveAccess(members, pub) {
+    const r = await fetch(API + '/access', { method: 'PUT', credentials: 'same-origin', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ members, public: pub ?? access.public }) });
     if (!r.ok) { toast('Not shared: ' + ((await r.json().catch(() => null))?.error ?? 'server error')); return; }
     access = await r.json(); renderShare();
     load(false); // removing someone changes the file links
   }
   function renderShare() {
     const list = $('#share-list'); list.textContent = '';
+    $('#share-public-on').checked = !!access.public;
     const row = (email, right) => { const li = document.createElement('li'); li.innerHTML = '<span class="e"></span>'; li.firstChild.textContent = email; li.append(...right); list.appendChild(li); };
     if (access.owner) { const r = document.createElement('span'); r.className = 'r'; r.textContent = 'Owner'; row(access.owner, [r]); }
     for (const m of access.members) {
@@ -1181,6 +1192,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     $('#share-email').value = '';
     saveAccess([...access.members.filter(m => m.email !== email), { email, role: $('#share-role').value }]);
   });
+  $('#share-public-on').addEventListener('change', e => saveAccess(access.members, e.target.checked));
   $('#share-copy').addEventListener('click', async () => {
     try { await navigator.clipboard.writeText(location.origin + location.pathname); toast('Link copied'); } catch { toast(location.origin + location.pathname); }
   });

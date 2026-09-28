@@ -66,7 +66,8 @@ app.get('/logout', c => {
 
 // ---- pages ----
 app.get('/', c => (sessionEmail(getCookie(c, COOKIE)) ? html(c, pages.index) : loginRedirect(c)));
-app.get('/c/:id', c => (sessionEmail(getCookie(c, COOKIE)) ? html(c, pages.viewer) : loginRedirect(c)));
+// Served to anyone: a public canvas opens without signing in; otherwise the viewer sends people to /login.
+app.get('/c/:id', c => html(c, pages.viewer));
 app.get('/privacy', c => html(c, pages.privacy));
 app.get('/terms', c => html(c, pages.terms));
 
@@ -90,9 +91,11 @@ app.get('/f/:id/:key/*', async c => {
 
 // ---- API ----
 const api = new Hono<Env>();
+// Reading a canvas works signed out too (email ''), for public canvases; gate() answers 401 for the rest.
+const openRead = (c: Context) => c.req.method === 'GET' && /^\/api\/canvases\/[^/]+$/.test(c.req.path);
 api.use('*', async (c, next) => {
-  const email = userOf(c);
-  if (!email) return c.json({ error: 'Sign in first' }, 401);
+  const email = userOf(c) ?? (openRead(c) ? '' : null);
+  if (email === null) return c.json({ error: 'Sign in first' }, 401);
   c.set('email', email);
   await next();
 });
@@ -108,6 +111,7 @@ async function gate(c: Context<Env>, need: Level) {
   if (!atLeast(level, need)) {
     // Canvases pushed before access lists existed have state but no access.json.
     denied = !access && !await store.readState(id) ? c.json({ error: 'Canvas not found' }, 404)
+      : !email ? c.json({ error: 'Sign in first' }, 401)
       : c.json({ error: level ? `Your role on this canvas is ${level}` : `${email} has no access to this canvas`, email, role: level }, 403);
   }
   return { id, email, access, level, denied };
@@ -123,7 +127,8 @@ api.get('/canvases', async c => {
   const ids = await store.listIds();
   const rows = await Promise.all(ids.map(async id => {
     const access = await store.readAccess(id);
-    const role = levelOf(access, email);
+    // Public canvases are open to anyone with the link, but only listed for the people they're shared with.
+    const role = levelOf(access && { ...access, public: false }, email);
     const s = role && await store.readState(id);
     return s ? { id: s.id, title: s.title, updatedAt: s.updatedAt, role, owner: access?.owner ?? null,
       boards: Object.keys(s.canvas.boards ?? {}).length, notes: s.canvas.annotations?.length ?? 0 } : null;
@@ -136,7 +141,8 @@ api.get('/canvases/:id', async c => {
   if (denied) return denied;
   const state = await store.readState(id);
   if (!state) return c.json({ error: 'Canvas not found' }, 404);
-  return c.json({ ...state, fileBase: `/f/${id}/${fileKey(id, access?.epoch)}/`, poll: POLL_MS, role: level, email }, 200, { 'cache-control': 'no-store' });
+  return c.json({ ...state, fileBase: `/f/${id}/${fileKey(id, access?.epoch)}/`, poll: POLL_MS, role: level, email: email || null, public: !!access?.public },
+    200, { 'cache-control': 'no-store' });
 });
 
 // Pushing is for the owner. The first push of a new id creates the canvas, if the caller may create canvases.
@@ -189,20 +195,25 @@ api.put('/canvases/:id/layout', async c => {
 api.get('/canvases/:id/access', async c => {
   const { access, level, denied } = await gate(c, 'viewer');
   if (denied) return denied;
-  return c.json({ owner: access?.owner ?? null, members: access?.members ?? [], role: level });
+  return c.json({ owner: access?.owner ?? null, members: access?.members ?? [], public: !!access?.public, role: level });
 });
 
 api.put('/canvases/:id/access', async c => {
   const { id, email, access, denied } = await gate(c, 'owner');
   if (denied) return denied;
   if (!access && !await store.readState(id)) return c.json({ error: 'Canvas not found' }, 404);
-  const members = parseMembers((await c.req.json<{ members?: unknown }>().catch(() => null))?.members);
-  if (!members) return c.json({ error: 'members: [{ email: "a@b.com" or "@b.com", role: "viewer" | "editor" }]' }, 400);
+  const body = await c.req.json<{ members?: unknown; public?: unknown }>().catch(() => null);
   const prev = access ?? { owner: email, epoch: 0, members: [] };
-  const removed = prev.members.some(m => !members.some(n => n.email === m.email));
-  const next: store.Access = { owner: prev.owner, epoch: prev.epoch + (removed ? 1 : 0), members };
+  // Either field may be left out to keep it as it is.
+  const members = body?.members === undefined ? prev.members : parseMembers(body.members);
+  if (!members) return c.json({ error: 'members: [{ email: "a@b.com" or "@b.com", role: "viewer" | "editor" }]' }, 400);
+  if (body?.public !== undefined && typeof body.public !== 'boolean') return c.json({ error: 'public: true | false' }, 400);
+  const isPublic = typeof body?.public === 'boolean' ? body.public : !!prev.public;
+  // Taking someone off (or the public link away) changes the file links, so links they kept stop working.
+  const removed = prev.members.some(m => !members.some(n => n.email === m.email)) || (!!prev.public && !isPublic);
+  const next: store.Access = { owner: prev.owner, epoch: prev.epoch + (removed ? 1 : 0), members, ...(isPublic ? { public: true } : {}) };
   await store.writeAccess(id, next);
-  return c.json({ owner: next.owner, members: next.members });
+  return c.json({ owner: next.owner, members: next.members, public: isPublic });
 });
 
 api.delete('/canvases/:id', async c => {

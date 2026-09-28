@@ -36,7 +36,9 @@ export function describe(a: Canvas | undefined, b: Canvas, fa: Record<string, st
   const boardsA = a?.boards ?? {}, boardsB = b.boards ?? {};
   const added = Object.keys(boardsB).filter(f => !boardsA[f]), removed = Object.keys(boardsA).filter(f => !boardsB[f]);
   const updated = Object.keys(boardsB).filter(f => boardsA[f] && fa[f] !== fb[f]);
-  const assets = [...new Set([...Object.keys(fa), ...Object.keys(fb)])].filter(p => !boardsA[p] && !boardsB[p] && fa[p] !== fb[p]);
+  // Board previews (_thumbs/) follow the boards, so they aren't counted on their own.
+  const assets = [...new Set([...Object.keys(fa), ...Object.keys(fb)])]
+    .filter(p => !boardsA[p] && !boardsB[p] && !p.startsWith('_thumbs/') && fa[p] !== fb[p]);
   if (added.length) out.push(`${plural(added.length, 'board')} added`);
   if (removed.length) out.push(`${plural(removed.length, 'board')} removed`);
   if (updated.length) out.push(`${plural(updated.length, 'board')} updated`);

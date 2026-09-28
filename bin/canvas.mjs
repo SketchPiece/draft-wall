@@ -5,6 +5,7 @@
 //   canvas serve  <dir> [--port 4870]    view locally with live reload
 //   canvas push   <dir> [--id <id>]      upload to the hosted canvas, print its URL
 //   canvas pull   <dir>                  bring sticky notes, headings and board positions back from the hosted canvas
+//   canvas thumbs <id>                   make board previews for a canvas already on the server (push makes them too)
 //   canvas share  <dir|id> [add <email|@domain> [--role viewer|editor] | rm <email|@domain> | public on|off]
 //   canvas list | canvas rm <id>
 //   canvas login | logout <email> | accounts [--default <email>]   Google accounts the CLI acts as
@@ -12,7 +13,7 @@
 //   canvas creators [add|rm <email|@domain>]                     (admins) who may create canvases
 //   canvas config --url <https://…>      hosted canvas; --as <email> picks the account for one command
 import http from 'node:http';
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -335,6 +336,7 @@ async function push(dir, idFlag) {
     files[rel] = createHash('sha256').update(buf).digest('hex').slice(0, 16);
     if (remote?.files?.[rel] !== files[rel]) uploads.push([rel, buf]);
   }
+  uploads.push(...await addThumbs(root, doc, files, remote?.files));
   for (const [rel, buf] of uploads) {
     await call(account, 'PUT', `/api/canvases/${id}/files/${rel.split('/').map(encodeURIComponent).join('/')}`, buf, { 'content-type': contentType(rel) });
   }
@@ -347,6 +349,85 @@ async function push(dir, idFlag) {
     await call(account, 'PUT', `/api/canvases/${id}/access`, JSON.stringify({ members }), { 'content-type': 'application/json' });
     console.log(`Shared with ${shareText(members)}`);
   }
+}
+
+// ---------- board previews ----------
+// The viewer shows these pictures instead of live pages when zoomed out: a phone can't keep dozens of pages alive.
+// They're taken with the local Chrome and uploaded as _thumbs/<board>.png; without Chrome the canvas works as before.
+const THUMBS = path.join(os.homedir(), '.cache', 'canvas', 'thumbs');
+const thumbPath = f => `_thumbs/${f}.png`;
+function findChrome() {
+  const list = [process.env.CHROME,
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge', '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+    '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'];
+  return list.find(p => p && fs.existsSync(p));
+}
+function screenshot(chrome, file, w, h, out) {
+  return new Promise(resolve => {
+    const args = ['--headless=new', '--hide-scrollbars', '--mute-audio', `--window-size=${w},${h}`, '--force-device-scale-factor=1',
+      '--virtual-time-budget=4000', `--screenshot=${out}`, 'file://' + file];
+    execFile(chrome, args, { timeout: 30_000 }, () => resolve(fs.existsSync(out)));
+  });
+}
+
+// Adds a preview of every HTML board to the manifest; returns the ones the server doesn't have yet, taking missing ones.
+async function addThumbs(root, doc, files, remoteFiles = {}) {
+  const boards = Object.keys(doc.boards ?? {}).filter(f => !isDiagram(f) && files[f]);
+  if (!boards.length) return [];
+  // A board can use any other file in the folder (shared CSS, images), so all of them go into its key.
+  const assets = createHash('sha256').update(Object.entries(files).filter(([p]) => !doc.boards[p]).sort().join()).digest('hex');
+  const todo = [];
+  for (const f of boards) {
+    const b = doc.boards[f], key = createHash('sha256').update(`${files[f]}:${assets}:${b.w}x${b.h}`).digest('hex').slice(0, 16);
+    const cached = path.join(THUMBS, key + '.png');
+    if (remoteFiles[thumbPath(f)] === key || fs.existsSync(cached)) files[thumbPath(f)] = key;
+    else todo.push({ f, b, key, cached });
+  }
+  const chrome = todo.length && findChrome();
+  if (todo.length && !chrome) console.warn('No Chrome found (set CHROME=<path>): boards go without previews, which is heavy on phones.');
+  if (chrome) {
+    fs.mkdirSync(THUMBS, { recursive: true });
+    console.log(`Taking ${todo.length} board preview${todo.length === 1 ? '' : 's'}…`);
+    const queue = [...todo];
+    await Promise.all(Array.from({ length: Math.min(4, queue.length) }, async () => {
+      for (let t; (t = queue.shift());) {
+        const tmp = `${t.cached}.${process.pid}.png`;
+        // A second try: with several Chromes at once one sometimes runs out of time.
+        const ok = await screenshot(chrome, path.join(root, t.f), t.b.w, t.b.h, tmp) || await screenshot(chrome, path.join(root, t.f), t.b.w, t.b.h, tmp);
+        if (ok) { fs.renameSync(tmp, t.cached); files[thumbPath(t.f)] = t.key; }
+        else console.warn(`No preview for ${t.f}`);
+      }
+    }));
+  }
+  return boards.filter(f => files[thumbPath(f)] && remoteFiles[thumbPath(f)] !== files[thumbPath(f)])
+    .map(f => [thumbPath(f), fs.readFileSync(path.join(THUMBS, files[thumbPath(f)] + '.png'))]);
+}
+
+// Previews for a canvas already on the server: its files are fetched into a temp folder and the canvas itself stays as it is.
+async function thumbsFor(id) {
+  if (!id || !validId(id)) die('Usage: canvas thumbs <id>');
+  const account = pickAccount(null);
+  const remote = await call(account, 'GET', `/api/canvases/${id}`);
+  if (!remote) die(`Canvas ${id} is not on the server.`);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'canvas-thumbs-'));
+  try {
+    const files = Object.fromEntries(Object.entries(remote.files).filter(([p]) => !p.startsWith('_thumbs/')));
+    for (const rel of Object.keys(files)) {
+      const r = await fetch(serverUrl() + remote.fileBase + rel.split('/').map(encodeURIComponent).join('/'));
+      if (!r.ok) die(`Couldn't fetch ${rel}: ${r.status}`);
+      fs.mkdirSync(path.dirname(path.join(root, rel)), { recursive: true });
+      fs.writeFileSync(path.join(root, rel), Buffer.from(await r.arrayBuffer()));
+    }
+    const uploads = await addThumbs(root, remote.canvas, files, remote.files);
+    for (const [rel, buf] of uploads) {
+      await call(account, 'PUT', `/api/canvases/${id}/files/${rel.split('/').map(encodeURIComponent).join('/')}`, buf, { 'content-type': 'image/png' });
+    }
+    // The latest canvas, so notes or moves made meanwhile aren't undone.
+    const now = await call(account, 'GET', `/api/canvases/${id}`);
+    await call(account, 'POST', `/api/canvases/${id}/commit`, JSON.stringify({ canvas: now.canvas, files: { ...now.files, ...files } }), { 'content-type': 'application/json' });
+    console.log(`${id}: ${uploads.length} preview${uploads.length === 1 ? '' : 's'} uploaded`);
+  } finally { fs.rmSync(root, { recursive: true, force: true }); }
 }
 
 // Reads every diagram board the way the viewer will and reports what it can't draw.
@@ -402,6 +483,7 @@ switch (cmd) {
   case 'serve': serve(needDir(), Number(args.port) || 4870, str(args.title)); break;
   case 'push': await push(needDir(), str(args.id)); break;
   case 'pull': await pull(needDir()); break;
+  case 'thumbs': await thumbsFor(arg); break;
   case 'share': await share(arg); break;
   case 'list': {
     const account = pickAccount(null);
@@ -448,5 +530,5 @@ switch (cmd) {
     break;
   }
   default:
-    die(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 12).map(l => l.replace(/^\/\/ ?/, '')).join('\n'));
+    die(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('\n').slice(1, 13).map(l => l.replace(/^\/\/ ?/, '')).join('\n'));
 }

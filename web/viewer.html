@@ -775,6 +775,9 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     doc.boards ??= {}; doc.order ??= Object.keys(doc.boards); doc.notes ??= {}; doc.annotations ??= [];
     for (const f of Object.keys(doc.boards)) if (!doc.order.includes(f)) doc.order.push(f);
     if ((sel?.type === 'ann' && !ann(sel.id)) || (sel?.type === 'note' && !doc.notes[sel.id])) sel = null;
+    // Someone else changed the canvas (or a version was restored): the steps to undo no longer fit it.
+    const now = !preview && layout();
+    if (now && now !== base) { base = now; undos.length = redos.length = 0; }
     render();
   }
   function denied(email) {
@@ -790,8 +793,38 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden) load(false); });
 
-  function save() {
+  // ---------- undo ----------
+  // Every save is one step: the layout before it goes on the undo stack.
+  const undos = [], redos = [], MAX_UNDO = 100;
+  let base = null;
+  const layout = () => JSON.stringify({
+    boards: Object.fromEntries(files().map(f => [f, { x: doc.boards[f].x, y: doc.boards[f].y, nodes: doc.boards[f].nodes }])),
+    annotations: doc.annotations, notes: doc.notes,
+  });
+  function record() {
+    const now = layout();
+    if (now === base) return;
+    if (base != null) { undos.push(base); if (undos.length > MAX_UNDO) undos.shift(); }
+    redos.length = 0; base = now;
+  }
+  function step(from, to) {
+    if (!canEdit || busy || editing || editingNote || !from.length) return;
+    to.push(base);
+    const l = JSON.parse(base = from.pop());
+    for (const [f, b] of Object.entries(l.boards)) {
+      const d = doc.boards[f]; if (!d) continue;
+      d.x = b.x; d.y = b.y;
+      if (b.nodes) d.nodes = b.nodes; else delete d.nodes;
+    }
+    doc.annotations = l.annotations; doc.notes = l.notes;
+    if ((sel?.type === 'ann' && !ann(sel.id)) || (sel?.type === 'note' && !doc.notes[sel.id])) sel = null;
+    render(); save(false);
+  }
+  const undo = () => step(undos, redos), redo = () => step(redos, undos);
+
+  function save(track = true) {
     if (!canEdit) return;
+    if (track) record();
     clearTimeout(saveTimer);
     saveTimer = setTimeout(async () => {
       saveTimer = null; saving = true;
@@ -1360,6 +1393,11 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
 
   addEventListener('keydown', e => {
     if (e.target.closest?.('input, textarea, [contenteditable]')) return;
+    if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.code === 'KeyZ' || (e.code === 'KeyY' && !e.shiftKey))) {
+      e.preventDefault();
+      if (e.shiftKey || e.code === 'KeyY') redo(); else undo();
+      return;
+    }
     if (focusFile) {
       if (e.key === 'Escape') closeFocus();
       else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') stepFocus(-1);

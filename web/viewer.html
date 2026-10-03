@@ -65,6 +65,8 @@ svg { display: block; flex: none; }
   color: var(--muted); white-space: nowrap; }
 .label .name { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .board.selected .label, .board:hover .label { color: var(--text); }
+/* Zoomed far out, a label grows taller than the gap above its board; it gives way to a heading it would run into. */
+.board.covered .label .name { visibility: hidden; }
 .label button, .label a { display: grid; place-items: center; width: calc(22px / var(--z)); height: calc(22px / var(--z));
   border-radius: calc(6px / var(--z)); color: var(--muted); opacity: 0; transition: opacity .12s; }
 .label svg { width: calc(14px / var(--z)); height: calc(14px / var(--z)); }
@@ -515,7 +517,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     if (!$('#ann-bar').hidden || sel?.type === 'ann' || sel?.type === 'note') placeAnnBar();
     clearTimeout(viewTimer); viewTimer = setTimeout(() => store.set(viewKey, { ...view, vw: innerWidth }), 400);
     // --z restyles everything drawn at a zoom-independent size (labels, outlines); that waits for the gesture to end.
-    if (!world.classList.contains('moving')) { world.style.setProperty('--z', view.z); parkBoards(); }
+    if (!world.classList.contains('moving')) { world.style.setProperty('--z', view.z); parkBoards(); coverLabels(); }
   }
   // Pan and zoom by touch, wheel or trackpad: at most one update per frame, and the heavy part when it settles.
   function moveView() {
@@ -644,6 +646,16 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
       Object.assign(el.style, { left: (n.x ?? 0) + 'px', top: (n.y ?? 0) + 'px' });
       if (n.maxW) el.style.maxWidth = n.maxW + 'px';
       world.appendChild(el);
+    }
+    coverLabels();
+  }
+  // Hide a board's name where a heading or text overlaps it. Labels and notes are both laid out in canvas units.
+  function coverLabels() {
+    const notes = [...world.querySelectorAll('.note')].map(n => [n.offsetLeft, n.offsetTop, n.offsetLeft + n.offsetWidth, n.offsetTop + n.offsetHeight]);
+    for (const [f, el] of boardEls) {
+      const b = doc.boards[f]; if (!b) continue;
+      const top = b.y - el.querySelector('.label').offsetHeight;
+      el.classList.toggle('covered', notes.some(([l, t, r, bt]) => l < b.x + b.w && r > b.x && t < b.y && bt > top));
     }
   }
   function renderAnns() {
@@ -1018,10 +1030,12 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     } else if (g.mode === 'note') {
       const n = doc.notes[g.note]; n.x = Math.round(g.ax + dx / view.z); n.y = Math.round(g.ay + dy / view.z);
       const el = world.querySelector(`.note[data-nid="${CSS.escape(g.note)}"]`); el.style.left = n.x + 'px'; el.style.top = n.y + 'px';
+      coverLabels();
     } else if (g.mode === 'board') {
       const b = doc.boards[g.board]; b.x = Math.round((g.bx + dx / view.z) / 10) * 10; b.y = Math.round((g.by + dy / view.z) / 10) * 10;
       const el = boardEls.get(g.board); el.style.left = b.x + 'px'; el.style.top = b.y + 'px';
       moveNotes(g.pinned, b.x - g.bx, b.y - g.by);
+      coverLabels();
     } else if (g.mode === 'node') moveNode(g, dx, dy);
   });
   // Notes pinned to what's being dragged travel with it.

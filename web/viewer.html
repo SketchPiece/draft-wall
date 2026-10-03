@@ -166,15 +166,16 @@ body.readonly [data-tool="sticky"], body.readonly [data-tool="text"], body.reado
 #share li .r { color: var(--faint); padding-right: 8px; }
 #share li select { height: 26px; padding: 0 22px 0 6px; background-position: right 5px center; }
 #share li .ibtn:hover { color: var(--danger); }
-#share-public { display: flex; align-items: center; gap: 10px; margin: 10px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); cursor: pointer; }
+#share-public { position: relative; display: flex; align-items: center; gap: 10px; margin: 10px 0 0; padding: 10px 0 0; border-top: 1px solid var(--line); cursor: pointer; }
 #share-public span { flex: 1; }
 #share-public small { display: block; color: var(--muted); font-size: 12px; }
-#share-public input { appearance: none; -webkit-appearance: none; flex: none; width: 32px; height: 18px; margin: 0; padding: 0; border: 0; border-radius: 9px; background: var(--line-2); position: relative; cursor: pointer; transition: background .12s; }
-#share-public input::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; transition: translate .12s; }
-#share-public input:checked { background: var(--accent); }
-#share-public input:checked::after { translate: 14px 0; }
-#share-public input:focus { outline: none; }
-#share-public input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* The checkbox is hidden; the track is a separate element, since iOS Safari mis-draws ::after on inputs. */
+#share-public input { position: absolute; opacity: 0; width: 1px; height: 1px; margin: 0; padding: 0; border: 0; pointer-events: none; }
+#share-public .sw { flex: none; position: relative; width: 32px; height: 18px; border-radius: 9px; background: var(--line-2); transition: background .12s; }
+#share-public .sw::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: 50%; background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.2); transition: translate .12s; }
+#share-public input:checked + .sw { background: var(--accent); }
+#share-public input:checked + .sw::after { translate: 14px 0; }
+#share-public input:focus-visible + .sw { outline: 2px solid var(--accent); outline-offset: 2px; }
 #share-copy { margin-top: 8px; height: 28px; padding: 0 10px; border-radius: 7px; border: 1px solid var(--line-2); color: var(--text); }
 #share-copy:hover { background: var(--hover); }
 /* History: every push and edit, newest first; picking one shows the canvas as it was */
@@ -406,7 +407,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     <button type="submit">Add</button>
   </form>
   <ul id="share-list"></ul>
-  <label id="share-public"><span>Anyone with the link<small>Can view without signing in</small></span><input type="checkbox" id="share-public-on" role="switch"></label>
+  <label id="share-public"><span>Anyone with the link<small>Can view without signing in</small></span><input type="checkbox" id="share-public-on" role="switch"><i class="sw" aria-hidden="true"></i></label>
   <button type="button" id="share-copy">Copy link</button>
 </section>
 

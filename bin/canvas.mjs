@@ -354,6 +354,7 @@ async function push(dir, idFlag) {
 // ---------- board previews ----------
 // The viewer shows these pictures instead of live pages when zoomed out: a phone can't keep dozens of pages alive.
 // They're taken with the local Chrome and uploaded as _thumbs/<board>.png; without Chrome the canvas works as before.
+// Half size: still sharp at the zoom where the live page takes over, and a quarter of the memory on a phone.
 const THUMBS = path.join(os.homedir(), '.cache', 'canvas', 'thumbs');
 const thumbPath = f => `_thumbs/${f}.png`;
 function findChrome() {
@@ -365,7 +366,7 @@ function findChrome() {
 }
 function screenshot(chrome, file, w, h, out) {
   return new Promise(resolve => {
-    const args = ['--headless=new', '--hide-scrollbars', '--mute-audio', `--window-size=${w},${h}`, '--force-device-scale-factor=1',
+    const args = ['--headless=new', '--hide-scrollbars', '--mute-audio', `--window-size=${w},${h}`, '--force-device-scale-factor=0.5',
       '--virtual-time-budget=4000', `--screenshot=${out}`, 'file://' + file];
     execFile(chrome, args, { timeout: 30_000 }, () => resolve(fs.existsSync(out)));
   });
@@ -379,7 +380,7 @@ async function addThumbs(root, doc, files, remoteFiles = {}) {
   const assets = createHash('sha256').update(Object.entries(files).filter(([p]) => !doc.boards[p]).sort().join()).digest('hex');
   const todo = [];
   for (const f of boards) {
-    const b = doc.boards[f], key = createHash('sha256').update(`${files[f]}:${assets}:${b.w}x${b.h}`).digest('hex').slice(0, 16);
+    const b = doc.boards[f], key = createHash('sha256').update(`${files[f]}:${assets}:${b.w}x${b.h}:half`).digest('hex').slice(0, 16);
     const cached = path.join(THUMBS, key + '.png');
     if (remoteFiles[thumbPath(f)] === key || fs.existsSync(cached)) files[thumbPath(f)] = key;
     else todo.push({ f, b, key, cached });

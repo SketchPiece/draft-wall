@@ -535,11 +535,18 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
   }
   // Which boards run their page. A phone can't keep dozens of pages alive (Safari reloads the tab), so a board
   // with a preview picture shows that until it's big enough on screen to read, boards far from the view let go of
-  // their page, and a phone keeps at most a few pages, the ones nearest the middle of the screen.
-  const TOUCH = matchMedia('(pointer: coarse)').matches, MAX_LIVE = TOUCH ? 6 : Infinity, LIVE_PX = 200;
+  // their page, and a phone keeps at most a few pages, the ones on screen nearest its middle, and none behind the
+  // full-size view. After the tab died (crashed) it comes back with one page, so it doesn't crash again in a loop.
+  const TOUCH = matchMedia('(pointer: coarse)').matches, LIVE_PX = 200;
+  const CRASH_KEY = 'canvas-alive:' + id, crashed = TOUCH && store.get(CRASH_KEY) === true;
+  const MAX_LIVE = !TOUCH ? Infinity : crashed ? 1 : 3;
+  if (TOUCH) {
+    const alive = () => store.set(CRASH_KEY, !document.hidden);
+    alive(); addEventListener('pagehide', () => store.set(CRASH_KEY, false)); document.addEventListener('visibilitychange', alive);
+  }
   function parkBoards() {
     if (!doc) return;
-    const m = Math.max(innerWidth, innerHeight);
+    const m = TOUCH ? 0 : Math.max(innerWidth, innerHeight);
     const x0 = (-m - view.x) / view.z, y0 = (-m - view.y) / view.z, x1 = (innerWidth + m - view.x) / view.z, y1 = (innerHeight + m - view.y) / view.z;
     const cx = (innerWidth / 2 - view.x) / view.z, cy = (innerHeight / 2 - view.y) / view.z;
     const want = [];
@@ -548,7 +555,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
       if (!b || isDiagram(f) || !el.dataset.url) continue;
       const near = b.x < x1 && b.x + b.w > x0 && b.y < y1 && b.y + b.h > y0;
       const big = !el.querySelector('.thumb').hidden ? b.w * view.z >= LIVE_PX : true;
-      if (near && big) want.push([Math.hypot(b.x + b.w / 2 - cx, b.y + b.h / 2 - cy), f]);
+      if (near && big && !(TOUCH && focusFile)) want.push([Math.hypot(b.x + b.w / 2 - cx, b.y + b.h / 2 - cy), f]);
     }
     const live = new Set(want.sort((a, b) => a[0] - b[0]).slice(0, MAX_LIVE).map(w => w[1]));
     for (const [f, el] of boardEls) {
@@ -771,9 +778,9 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     if (!$('#history').hidden) loadHistory();
     if (first) {
       const v = store.get(viewKey);
-      if (v && isFinite(v.z) && Math.abs((v.vw ?? 0) - innerWidth) < 120) { view = { x: v.x, y: v.y, z: v.z }; apply(); } else fitAll();
+      if (v && isFinite(v.z) && Math.abs((v.vw ?? 0) - innerWidth) < 120 && !crashed) { view = { x: v.x, y: v.y, z: v.z }; apply(); } else fitAll();
       const f = location.hash && decodeURIComponent(location.hash.slice(1));
-      if (f && doc.boards[f]) openFocus(f);
+      if (f && doc.boards[f] && !crashed) openFocus(f);
     }
   }
   function show(next) {
@@ -1238,6 +1245,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     $('#focus').hidden = false;
     history.replaceState(null, '', '#' + encodeURIComponent(f));
     layoutFocus();
+    parkBoards();
     $('#focus-back').focus();
   }
   function layoutFocus() {
@@ -1266,6 +1274,7 @@ body:not(.readonly) .board.diagram .dgm.flow .n { cursor: move; }
     focusFile = null; $('#focus').hidden = true; $('#focus-iframe').src = 'about:blank';
     $('#focus-dg').textContent = ''; $('#focus-dg').dataset.key = '';
     history.replaceState(null, '', location.pathname);
+    parkBoards();
   }
   function stepFocus(d) { const fs = files(); if (fs.length) openFocus(fs[(fs.indexOf(focusFile) + d + fs.length) % fs.length]); }
   $('#focus-back').addEventListener('click', closeFocus);

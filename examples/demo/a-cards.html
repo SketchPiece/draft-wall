@@ -1,0 +1,22 @@
+<!doctype html><html><head><meta charset="utf-8"><title>A. Habit cards</title><link rel="stylesheet" href="_shared.css">
+<style>
+.h { padding: 8px 22px 14px; } .h small { color: #8a8579; font-weight: 600; } .h h1 { margin: 2px 0 0; font-size: 26px; }
+.list { padding: 0 16px; display: flex; flex-direction: column; gap: 10px; }
+.card { border-radius: 18px; padding: 14px 16px; display: flex; align-items: center; gap: 12px; }
+.card b { display: block; font-size: 15px; } .card span { font-size: 12px; opacity: .7; }
+.dot { width: 34px; height: 34px; border-radius: 50%; border: 2.5px solid currentColor; margin-left: auto; display: grid; place-items: center; font-weight: 700; }
+.done .dot { background: currentColor; } .done .dot::after { content: "✓"; color: #fff; }
+.c1 { background: #fde8d7; color: #b4531a; } .c2 { background: #dcefe3; color: #23744a; } .c3 { background: #e2e6fb; color: #3a4bb0; } .c4 { background: #f6e4f1; color: #a33b86; }
+.card b, .card span { color: #1b1d22; }
+.fab { position: absolute; bottom: 24px; right: 22px; width: 56px; height: 56px; border-radius: 18px; background: #1b1d22; color: #fff; display: grid; place-items: center; font-size: 28px; }
+</style></head><body><div class="cap">A · Cards</div><div class="stage">
+<div class="phone"><div class="bar"><span>9:41</span><span>●●● ▮</span></div>
+<div class="h"><small>Tuesday, 14 Oct</small><h1>Today</h1></div>
+<div class="list">
+<div class="card c1 done"><div><b>Morning run</b><span>5 km · 12-day streak</span></div><div class="dot"></div></div>
+<div class="card c2 done"><div><b>Read 20 pages</b><span>Dune · p. 214</span></div><div class="dot"></div></div>
+<div class="card c3"><div><b>Drink water</b><span>5 of 8 glasses</span></div><div class="dot">5</div></div>
+<div class="card c4"><div><b>Meditate</b><span>10 min · evening</span></div><div class="dot"></div></div>
+</div><div class="fab">+</div></div>
+<div class="side"><span class="tag">variant A</span><h2>One colored card per habit</h2><p>Each habit owns a color. Tap the ring to check it off; counters live inside the ring.</p></div>
+</div></body></html>

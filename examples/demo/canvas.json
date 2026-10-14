@@ -1,0 +1,86 @@
+{
+ "v": 3,
+ "title": "Habit tracker · home screen",
+ "launch": {
+  "view": "canvas"
+ },
+ "pages": [],
+ "boards": {
+  "a-cards.html": {
+   "x": 0,
+   "y": 0,
+   "w": 1280,
+   "h": 800,
+   "title": "A. Habit cards"
+  },
+  "b-ring.html": {
+   "x": 1360,
+   "y": 0,
+   "w": 1280,
+   "h": 800,
+   "title": "B. Progress ring"
+  },
+  "c-week.html": {
+   "x": 0,
+   "y": 960,
+   "w": 1280,
+   "h": 800,
+   "title": "C. Week grid"
+  },
+  "checkin-flow.mmd": {
+   "x": 1360,
+   "y": 960,
+   "w": 1280,
+   "h": 800,
+   "title": "Check-in flow"
+  }
+ },
+ "order": [
+  "a-cards.html",
+  "b-ring.html",
+  "c-week.html",
+  "checkin-flow.mmd"
+ ],
+ "notes": {
+  "t": {
+   "x": 0,
+   "y": -240,
+   "text": "Habit tracker · home screen",
+   "kind": "title1",
+   "maxW": 2640
+  },
+  "sub": {
+   "x": 0,
+   "y": -150,
+   "text": "Three takes on the Today screen, plus the check-in flow as a Mermaid diagram.",
+   "kind": "text",
+   "maxW": 2640
+  }
+ },
+ "annotations": [
+  {
+   "id": "demo-1",
+   "x": 820,
+   "y": 600,
+   "w": 420,
+   "text": "Love the per-habit colors. Can the ring counter work for any numeric goal, not just water?"
+  },
+  {
+   "id": "demo-2",
+   "x": 2180,
+   "y": 620,
+   "w": 420,
+   "color": "blue",
+   "text": "B feels calm. Maybe use it as the widget and keep A for the app itself?"
+  },
+  {
+   "id": "demo-3",
+   "x": 820,
+   "y": 1580,
+   "w": 420,
+   "color": "green",
+   "text": "C as a second tab next to Today: yes."
+  }
+ ],
+ "designSystems": []
+}

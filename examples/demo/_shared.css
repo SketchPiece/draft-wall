@@ -1,0 +1,10 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", sans-serif; color: #1b1d22; background: #f4f2ee; }
+.stage { display: flex; gap: 48px; align-items: center; justify-content: center; height: 800px; padding: 40px; }
+.cap { position: absolute; left: 44px; top: 32px; font: 600 13px ui-monospace, Menlo, monospace; letter-spacing: .06em; text-transform: uppercase; color: #8a8579; }
+.phone { width: 300px; height: 620px; border-radius: 44px; background: #fff; box-shadow: 0 30px 60px -20px rgba(30,25,15,.25), 0 0 0 10px #1b1d22; overflow: hidden; position: relative; display: flex; flex-direction: column; }
+.phone .bar { height: 44px; display: flex; justify-content: space-between; align-items: center; padding: 0 26px; font-size: 12px; font-weight: 600; }
+.side { width: 360px; display: flex; flex-direction: column; gap: 14px; }
+.side h2 { margin: 0; font-size: 30px; line-height: 1.15; letter-spacing: -.01em; }
+.side p { margin: 0; color: #5d5a52; }
+.tag { align-self: flex-start; font: 600 12px ui-monospace, Menlo, monospace; padding: 4px 10px; border-radius: 99px; background: #e7e2d8; color: #5d5a52; }

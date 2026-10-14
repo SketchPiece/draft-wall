@@ -105,4 +105,4 @@ The hosted app is a single Node process that stores canvases as files, so it run
 
 ## License
 
-[MIT](LICENSE) © 2026 Andrew Lubkin
+[MIT](LICENSE) © 2026 Andrew Liubkin

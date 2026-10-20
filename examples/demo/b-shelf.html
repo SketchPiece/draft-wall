@@ -1,0 +1,46 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>B. Shelf</title><link rel="stylesheet" href="_shared.css">
+<style>
+body { background: #e9eee3; }
+.hd { padding: 8px 18px 10px; display: flex; align-items: end; justify-content: space-between; }
+.hd h1 { margin: 0; font: 600 28px/1.1 var(--serif); letter-spacing: -.01em; }
+.hd small { font: 500 12px var(--sans); color: var(--ink-3); display: block; margin-bottom: 2px; }
+.hd .av { width: 34px; height: 34px; border-radius: 50%; background: linear-gradient(135deg, #f2c14e, #c8714b); color: #fff; display: grid; place-items: center; font: 600 13px var(--sans); }
+.seg { margin: 4px 18px 12px; display: flex; background: #f1ecdf; border-radius: 12px; padding: 3px; font: 600 12px var(--sans); color: var(--ink-3); }
+.seg span { flex: 1; text-align: center; padding: 6px 0; border-radius: 9px; }
+.seg .on { background: #fff; color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.grid { padding: 0 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.tile { border-radius: 20px; padding: 10px 12px 12px; position: relative; overflow: hidden; height: 196px; display: flex; flex-direction: column; }
+.tile svg.plant { width: 108px; height: 132px; margin: -4px auto -6px; }
+.tile b { font: 600 14px var(--sans); }
+.tile span { font-size: 11.5px; color: var(--ink-2); }
+.meter { height: 5px; border-radius: 3px; background: rgba(0,0,0,.08); margin-top: 7px; overflow: hidden; }
+.meter i { display: block; height: 100%; border-radius: 3px; background: var(--water); }
+.badge { position: absolute; top: 10px; right: 10px; }
+.badge.thirsty { background: var(--water); color: #fff; }
+.badge.ok { background: rgba(255,255,255,.7); color: var(--leaf); }
+</style></head><body>
+<div class="cap"><b>B</b>Today · shelf</div>
+<div class="stage">
+  <div class="phone">
+    <div class="status"><span>9:41</span><i></i></div>
+    <div class="scroll">
+      <div class="hd"><div><small>12 plants · 3 rooms</small><h1>Your shelf</h1></div><div class="av">MO</div></div>
+      <div class="seg"><span class="on">Living room</span><span>Bedroom</span><span>Office</span></div>
+      <div class="grid">
+        <div class="tile" style="background:#dcebd9"><span class="pill badge thirsty">Today</span><i data-plant="monstera"></i><b>Monty</b><span>Soil 18% · water today</span><div class="meter"><i style="width:18%"></i></div></div>
+        <div class="tile" style="background:#f6e7cf"><span class="pill badge thirsty">Today</span><i data-plant="fiddle" data-pot="#efe8db"></i><b>Figgy</b><span>Soil 24% · water today</span><div class="meter"><i style="width:24%"></i></div></div>
+        <div class="tile" style="background:#e6e1f1"><span class="pill badge ok">✓ 8:12</span><i data-plant="pothos" data-pot="#d8cbb4"></i><b>Pip</b><span>Soil 71% · in 6 days</span><div class="meter"><i style="width:71%"></i></div></div>
+        <div class="tile" style="background:#f3eed2"><span class="pill badge ok">Sat</span><i data-plant="snake" data-pot="#2f3b33"></i><b>Sammy</b><span>Soil 55% · feed on Sat</span><div class="meter"><i style="width:55%"></i></div></div>
+      </div>
+    </div>
+    <nav class="tabs" data-on="shelf"></nav>
+  </div>
+  <div class="side">
+    <span class="tag">Variant B</span>
+    <h2>The shelf, room by room</h2>
+    <p>Your plants as a collection. Each tile shows soil moisture from the last check-in, and the ones due today get a blue badge.</p>
+    <ul class="pros"><li>Feels like your own plants, not a task list</li><li>Rooms match how people think about watering</li><li class="con">Due plants can sit below the fold</li></ul>
+  </div>
+</div>
+<script src="_sprout.js"></script>
+</body></html>

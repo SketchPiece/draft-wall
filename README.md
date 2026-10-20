@@ -1,29 +1,55 @@
 # Draftwall
 
-**A design wall for AI agents.** An agent writes HTML mockups and Mermaid diagrams into a folder. Draftwall lays them out on a zoomable board, where you compare them side by side, leave sticky notes and send the notes back to the agent. You can run it locally with one command, or host it so a canvas also opens on your phone.
+**A design wall for coding agents.** An agent writes HTML mockups and Mermaid diagrams into a folder. Draftwall lays them out on a zoomable canvas where you compare them side by side and leave sticky notes, on a laptop or a phone. The agent pulls the notes back as text and makes the next round.
 
-![A Draftwall canvas: three mockups of a habit tracker, a Mermaid flow and sticky notes](docs/screenshot-canvas.png)
+![A Draftwall canvas with four mockups of a plant care app, a Mermaid flow and sticky notes pinned to the designs](docs/canvas-dark.png)
 
-<sub>The demo canvas from [`examples/demo`](examples/demo), opened with `npm run local examples/demo`.</sub>
+<table>
+<tr>
+<td width="68%"><img src="docs/notes-closeup.png" alt="Close-up: sticky notes pinned to spots on two boards, with dashed threads to the pins"></td>
+<td><img src="docs/phone-note-light.png" alt="Leaving a sticky note on a phone"></td>
+</tr>
+<tr>
+<td><sub>Notes can be pinned to a spot on a board or to a diagram node.</sub></td>
+<td><sub>The same canvas on a phone, with a new note.</sub></td>
+</tr>
+</table>
 
-## Why
+<sub>The screenshots use the made-up "Sprout" canvas in [`examples/demo`](examples/demo). The people and the product are invented.</sub>
 
-Coding agents are good at producing UI variants as plain HTML, but a pile of files in a folder is hard to review. Draftwall turns that folder into a canvas. Every board is a live page you can zoom into and every comment is a note pinned next to the design. Everything is stored as plain files, so the agent can read your feedback and iterate.
+## The loop
 
-A canvas is a folder of HTML boards plus `canvas.json`. That's the same format Claude Desktop uses for its canvases, so canvases made there open here too.
+1. You ask an agent (I use Claude Code) for a screen. It writes each variant as a standalone HTML file, plus `.mmd` files for flows, into a canvas folder.
+2. It runs `canvas push <dir>` and gives you the link.
+3. You open the link, zoom around and leave sticky notes where something is off: "label the dashed line", "cap snoozes at two days". A note can be pinned to a spot on a board or to a node of a diagram.
+4. The agent runs `canvas pull <dir>`. The notes land in `canvas.json` and are printed in a form the agent can act on (abridged):
+
+   ```
+   - [n-chart, pink] pinned to "C. Plant detail" (c-plant-detail.html) at 330,627: Label the dashed line ("droops below 20%"), otherwise nobody will get it.
+   - [n-snooze] pinned to node "Snoozed?" (id snooze) in "Watering reminder flow" (watering-flow.mmd): Cap snoozes at two days, otherwise plants die quietly.
+   ```
+
+5. It edits the boards and pushes again. Your notes stay on the canvas, and every push is kept in History.
+
+A canvas is just a folder of HTML boards plus `canvas.json`. That's the same format Claude Desktop uses for its canvases, so canvases made there open here too.
 
 ## Features
 
-- **Zoomable board.** Pan and pinch-zoom across any number of boards. Each board is a real HTML page in a sandboxed frame. It stays live while it's large on screen and switches to a PNG preview when it's small or far away, so big canvases stay smooth on phones.
-- **Sticky notes and headings.** Leave yellow, green or blue notes anywhere and pin them to a spot on a board or to a node of a diagram. Add titles and text right on the canvas. Undo and redo with Cmd+Z / Cmd+Shift+Z.
-- **Diagram boards.** A Mermaid file (`*.mmd`: flowchart, sequence, state or ER) in the folder becomes its own board. It's laid out with ELK and drawn as SVG in the Draftwall style. The source opens beside the canvas, and nodes you move by hand stay where you put them.
-- **Themes.** Several color themes with light and dark variants. Diagrams pick up the theme colors.
-- **Local mode with live reload.** `canvas serve <dir>` watches the folder, so a board appears on the canvas as soon as an agent writes it.
-- **Hosted mode.** Push a canvas to your own server and sign in with Google. Share it by email, with a whole domain (`@company.com`) or as a public link. Members are either `viewer`s or `editor`s.
-- **History.** Every push, edit and restore is saved as a version. The History panel shows any earlier version and can restore it.
-- **CLI built for agents.** Includes `sync`, `serve`, `push`, `pull`, `share`, `list` and more. Every command runs non-interactively. The CLI supports several Google accounts and per-repo defaults.
+- **Zoomable canvas.** Pan and pinch-zoom across any number of boards. Each board is a real HTML page in a sandboxed iframe. It stays live while it's large on screen and switches to a PNG preview when it's small, so big canvases stay smooth on phones.
+- **Sticky notes and headings.** Yellow, green, blue, pink and gray notes, pinned to a board or a diagram node or left free. Titles and text right on the canvas. Undo and redo with Cmd+Z / Cmd+Shift+Z.
+- **Diagram boards.** A Mermaid file (`*.mmd`: flowchart, sequence, state or ER) becomes a board of its own, laid out with ELK and drawn as SVG. The source opens beside the canvas, and nodes you move by hand stay where you put them.
+- **Light and dark.** Follows the system setting, with several color themes in the picker. Diagrams pick up the theme colors.
+- **Local mode with live reload.** `canvas serve <dir>` watches the folder, so a board appears as soon as the agent writes it. No account, no server.
+- **Hosted mode.** Push a canvas to your own server and sign in with Google. Share it with an email, a whole domain (`@company.com`) or a public link. Members are viewers or editors; editors can also leave notes.
+- **History.** Every push and every edit in the viewer is saved as a version you can look at and restore.
+- **A CLI for agents.** Every command is non-interactive. The CLI handles several Google accounts and per-folder defaults.
 
-## Quick start
+| | |
+|---|---|
+| ![Light theme overview](docs/canvas-light.png) | ![The Share panel with an owner, two people and a domain](docs/share.png) |
+| ![A sticky note pinned to a node of a Mermaid diagram](docs/diagram-notes.png) | ![The phone view in dark mode](docs/phone-note-dark.png) |
+
+## Quick start (local)
 
 Requires Node 24.
 
@@ -31,10 +57,47 @@ Requires Node 24.
 git clone https://github.com/SketchPiece/draft-wall.git
 cd draft-wall
 npm install
-npm run local examples/demo     # serves http://127.0.0.1:4870/c/local
+npm run local examples/demo     # http://127.0.0.1:4870/c/local
 ```
 
-To make your own canvas, put some `.html` files (and optionally `.mmd` files) in a folder and run `node bin/canvas.mjs serve <folder>`. Boards are laid out automatically in `canvas.json`. When you move them in the viewer, the new layout is saved back. Run `npm link` to put the CLI on your PATH as `canvas`.
+For your own canvas, put `.html` (and optionally `.mmd`) files in a folder and run `node bin/canvas.mjs serve <folder>`. New boards are laid out in `canvas.json` automatically, and when you move them in the viewer the layout is saved back. `npm link` puts the CLI on your PATH as `canvas`.
+
+A board is any self-contained HTML page. It can load files that sit next to it (a shared stylesheet, scripts, images). Boards are 1280×800 by default; change `w` and `h` in `canvas.json` for other sizes.
+
+## CLI
+
+```sh
+canvas sync    <dir> [--title "…"]     # lay out new boards in canvas.json, keep placed ones
+canvas serve   <dir> [--port 4870]     # view locally with live reload
+canvas push    <dir> [--id <id>]       # upload to the hosted canvas and print its URL
+canvas pull    <dir>                   # bring notes, headings and board positions back, print the notes
+canvas thumbs  <id>                    # rebuild board previews for a canvas on the server
+canvas share   <dir|id> add <email|@domain> [--role viewer|editor]
+canvas share   <dir|id> rm <email|@domain>
+canvas share   <dir|id> public on|off
+canvas list                            # canvases you can see
+canvas rm      <id>
+canvas login                           # sign the CLI in with Google; repeat for more accounts
+canvas logout  <email>
+canvas accounts [--default <email>]
+canvas project [<dir>] [--account <email>] [--share "a@b.com:editor,@company.com"|none]
+canvas creators [add|rm <email|@domain>]   # admins: who may create canvases
+canvas config  --url https://your-draftwall.example.com
+```
+
+Add `--as <email>` to any command to act as a specific signed-in account.
+
+`push` keeps notes that were left on the hosted canvas since the last pull, so an agent can't wipe your feedback by pushing an older `canvas.json`. It also renders a PNG preview of every HTML board with your local Chrome (cached in `~/.cache/canvas/thumbs`).
+
+### Using it from an agent
+
+Any agent that can write files and run shell commands can drive Draftwall. Tell it to:
+
+- write each variant as a self-contained HTML file in one folder, and diagrams as `.mmd`;
+- run `canvas push <dir>` and send you the URL;
+- when you say you've left notes, run `canvas pull <dir>`, address each note, then push again.
+
+I keep these rules in a Claude Code skill that carries a copy of `bin/canvas.mjs`, `src/shared.js` and `web/viewer.html`, so any project can open a canvas.
 
 ## How it works
 
@@ -48,60 +111,32 @@ To make your own canvas, put some `.html` files (and optionally `.mmd` files) in
                  ◀──── canvas pull ◀── sticky notes, headings, positions
 ```
 
-- `web/viewer.html` is the canvas viewer, used in both modes. `web/theme.js` holds the color themes and the theme picker. `web/diagram.js` parses and draws Mermaid. Both are inlined into the viewer. `npm run embed` bundles `web/*.html` into `src/generated/pages.ts` for the hosted app.
-- `bin/canvas.mjs` is the CLI, and it includes the local server. Boards are served under a strict sandbox CSP. They talk to the viewer through a small injected bridge (`src/shared.js`).
-- `src/index.ts` is the hosted app ([Hono](https://hono.dev) on Node). It handles Google sign-in (a cookie for the browser, bearer tokens for the CLI), serves the API for push, pull, layout and sharing, and serves board files under capability URLs.
-- `src/access.ts` decides who may do what. Each canvas has an owner plus members, added by email or by domain:
-  - `viewer` members can look.
-  - `editor` members can also move boards, edit headings and leave notes.
-  - Only the owner can push and share, and only the owner can make a canvas public.
-  - Admins own every canvas and choose who may create canvases.
-- `src/store.ts` keeps canvases as plain files on disk (a volume in production). `src/history.ts` keeps the versions: `history.json`, `versions/<v>.json`, and file copies by hash in `objects/`.
-- `canvas push` makes board previews. It screenshots every HTML board with your local Chrome into `_thumbs/<board>.png`, cached in `~/.cache/canvas/thumbs`. `canvas thumbs <id>` does the same for a canvas that's already on the server.
-
-## Using it from an AI agent
-
-Draftwall was built to be driven by agents. I use it through a Claude Code skill (`canvas`) that carries a copy of `bin/canvas.mjs`, `src/shared.js` and `web/viewer.html`. When I ask for a design, the agent:
-
-1. writes each variant as a self-contained HTML board (and diagrams as `.mmd` files) into a canvas folder,
-2. runs `canvas push <dir>` and gives me the link, which I open on my laptop or phone,
-3. once I've left sticky notes, runs `canvas pull <dir>`, reads them from `canvas.json` (`annotations`) and iterates on the boards.
-
-Any agent that can write files and run shell commands can do the same. These are the commands you'll use most:
-
-```sh
-canvas sync   <dir> [--title "…"]     # lay out new boards in canvas.json
-canvas serve  <dir> [--port 4870]     # view locally with live reload
-canvas push   <dir> [--id <id>]       # upload to the hosted canvas, print its URL
-canvas pull   <dir>                   # bring notes, headings and positions back
-canvas share  <dir|id> add <email|@domain> [--role viewer|editor]
-canvas share  <dir|id> public on|off
-canvas login                          # sign the CLI in with Google (repeat for more accounts)
-canvas project <dir> --account <email> --share "a@b.com:editor,@company.com"
-canvas config --url https://your-draftwall.example.com
-```
+- `web/viewer.html` is the canvas viewer, used in both modes. `web/theme.js` (themes and the picker) and `web/diagram.js` (Mermaid parsing and drawing) are inlined into it. `npm run embed` bundles `web/*.html` into `src/generated/pages.ts` for the hosted app.
+- `bin/canvas.mjs` is the CLI, including the local server. Boards are served under a strict sandbox CSP and talk to the viewer through a small injected bridge (`src/shared.js`).
+- `src/index.ts` is the hosted app ([Hono](https://hono.dev) on Node): Google sign-in (a cookie for the browser, bearer tokens for the CLI), the API for push, pull, layout, history and sharing, and board files under capability URLs.
+- `src/access.ts` decides who may do what. A canvas has an owner and members, added by email or by domain. Viewers can look; editors can also move boards, edit headings and leave notes; only the owner can push, share and make a canvas public. Admins own every canvas and choose who may create canvases.
+- `src/store.ts` keeps canvases as plain files on disk. `src/history.ts` keeps versions: `history.json`, `versions/<v>.json`, and file copies by hash in `objects/`.
 
 ## Self-hosting
 
-The hosted app is a single Node process that stores canvases as files, so it runs anywhere with a persistent disk. Mine runs on [Railway](https://railway.com) as a `web` service that deploys from `main`, with a volume mounted at `/data`.
+The hosted app is one Node process that stores canvases as files, so it runs anywhere with a persistent disk. Mine runs on [Railway](https://railway.com) with a volume mounted at `/data`.
 
 1. Create a Google OAuth client (type: Web application) with the redirect URI `<origin>/auth/google/callback`.
-2. Set the environment variables listed in [`.env.example`](.env.example):
-   - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`
-   - `CANVAS_SECRET`
-   - `CANVAS_ADMINS` (comma-separated emails)
-   - `CANVAS_DATA_DIR` (the volume mount, e.g. `/data`)
-3. Build and start the server (`src/server.ts`). It listens on `PORT`, which defaults to 4870:
+2. Set the environment variables from [`.env.example`](.env.example):
+   - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`
+   - `CANVAS_SECRET`: any long random string; signs sessions, CLI tokens and file keys
+   - `CANVAS_ADMINS`: comma-separated admin emails
+   - `CANVAS_DATA_DIR`: where canvases live, e.g. `/data` (defaults to `./data`)
+   - `PORT`: defaults to 4870
+3. Build and start:
    ```sh
    npm install && npm run build && npm start
    ```
-4. Point the CLI at your server with `canvas config --url https://<your host>`, then run `canvas login`.
+4. Point the CLI at it with `canvas config --url https://<your host>`, then run `canvas login`.
 
 ### Development
 
-`npm run dev` runs the hosted app on http://localhost:4870 and reads env from `.env.local`. It stores canvases in `./data`. Locally, `/dev/login?email=…` signs you in as anyone, which makes it easy to try the roles. Run `npm run typecheck` to check the types.
-
-`scripts/migrate-blob.ts` is a one-off script. It copied canvases from an earlier Vercel Blob store onto the disk.
+`npm run dev` runs the hosted app on http://localhost:4870 with env from `.env.local`, storing canvases in `./data`. In dev, `/dev/login?email=…` signs you in as anyone, which makes it easy to try the roles. `npm run typecheck` checks the types.
 
 ## License
 

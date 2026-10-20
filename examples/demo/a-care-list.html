@@ -1,0 +1,52 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>A. Care list</title><link rel="stylesheet" href="_shared.css">
+<style>
+.hd { padding: 10px 22px 14px; }
+.hd small { font: 500 12px var(--sans); color: var(--ink-3); }
+.hd h1 { margin: 2px 0 10px; font: 600 27px/1.12 var(--serif); letter-spacing: -.01em; }
+.hd h1 em { font-style: normal; color: var(--leaf); }
+.chips { display: flex; gap: 6px; }
+.chips .pill { background: #f3ecdc; color: var(--ink-2); }
+.chips .pill.w { background: var(--sky); color: #2c5d9e; }
+h3 { margin: 6px 22px 8px; font: 600 11px var(--sans); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+.list { padding: 0 14px; display: grid; gap: 8px; }
+.row { display: flex; align-items: center; gap: 12px; padding: 7px 10px 7px 7px; border-radius: 18px; background: #fff; border: 1px solid var(--line); }
+.row .pic { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: end center; overflow: hidden; flex: none; }
+.row .pic svg { width: 54px; height: 66px; margin-bottom: -12px; }
+.row b { display: block; font-size: 14.5px; font-weight: 600; }
+.row span { font-size: 12px; color: var(--ink-3); }
+.row .go { margin-left: auto; width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; background: var(--water); color: #fff; flex: none; }
+.row .go svg { width: 16px; height: 16px; }
+.row.done { opacity: .55; }
+.row.done .go { background: var(--mint); color: var(--leaf); }
+.row.later .go { background: #f3ecdc; color: var(--ink-2); font: 600 11px var(--sans); width: auto; padding: 0 10px; }
+</style></head><body>
+<div class="cap"><b>A</b>Today · care list</div>
+<div class="stage">
+  <div class="phone">
+    <div class="status"><span>9:41</span><i></i></div>
+    <div class="scroll">
+      <div class="hd"><small>Thursday, 16 October</small><h1>Morning, Maya.<br><em>3 plants</em> are thirsty.</h1>
+        <div class="chips"><span class="pill w">💧 650 ml in total</span><span class="pill">☀ Bright · 19°</span></div></div>
+      <h3>Today</h3>
+      <div class="list">
+        <div class="row"><div class="pic" style="background:#e3eedf"><i data-plant="monstera"></i></div><div><b>Monty</b><span>Monstera · 300 ml</span></div><div class="go"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5S3.5 6.6 3.5 9.6a4.5 4.5 0 0 0 9 0C12.5 6.6 8 1.5 8 1.5Z"/></svg></div></div>
+        <div class="row"><div class="pic" style="background:#f6ead8"><i data-plant="fiddle" data-pot="#e9e2d4"></i></div><div><b>Figgy</b><span>Fiddle-leaf fig · 250 ml</span></div><div class="go"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5S3.5 6.6 3.5 9.6a4.5 4.5 0 0 0 9 0C12.5 6.6 8 1.5 8 1.5Z"/></svg></div></div>
+        <div class="row"><div class="pic" style="background:#e4ecf3"><i data-plant="fern" data-pot="#58705f"></i></div><div><b>Fernando</b><span>Boston fern · mist + 100 ml</span></div><div class="go"><svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5S3.5 6.6 3.5 9.6a4.5 4.5 0 0 0 9 0C12.5 6.6 8 1.5 8 1.5Z"/></svg></div></div>
+        <div class="row done"><div class="pic" style="background:#eee8f4"><i data-plant="pothos" data-pot="#d8cbb4"></i></div><div><b>Pip</b><span>Pothos · watered 8:12</span></div><div class="go"><svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m3.5 8.5 3 3 6-7"/></svg></div></div>
+      </div>
+      <h3 style="margin-top:14px">Later this week</h3>
+      <div class="list">
+        <div class="row later"><div class="pic" style="background:#f4efd9"><i data-plant="snake" data-pot="#2f3b33"></i></div><div><b>Sammy</b><span>Snake plant · feed</span></div><div class="go">Sat</div></div>
+      </div>
+    </div>
+    <nav class="tabs" data-on="today"></nav>
+  </div>
+  <div class="side">
+    <span class="tag">Variant A</span>
+    <h2>A to-do list for the day</h2>
+    <p>Only what needs doing today, with the total water up top so one trip with the can is enough. Everything else waits in “Later this week”.</p>
+    <ul class="pros"><li>Fastest path: open, water, done</li><li>Total volume answers “how full do I fill the can?”</li><li class="con">Your collection is out of sight</li></ul>
+  </div>
+</div>
+<script src="_sprout.js"></script>
+</body></html>

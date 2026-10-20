@@ -1,85 +1,166 @@
 {
  "v": 3,
- "title": "Habit tracker · home screen",
+ "title": "Sprout · Today screen",
  "launch": {
   "view": "canvas"
  },
  "pages": [],
  "boards": {
-  "a-cards.html": {
+  "a-care-list.html": {
    "x": 0,
    "y": 0,
    "w": 1280,
    "h": 800,
-   "title": "A. Habit cards"
+   "title": "A. Care list"
   },
-  "b-ring.html": {
+  "b-shelf.html": {
    "x": 1360,
    "y": 0,
    "w": 1280,
    "h": 800,
-   "title": "B. Progress ring"
+   "title": "B. Shelf"
   },
-  "c-week.html": {
+  "c-plant-detail.html": {
+   "x": 2720,
+   "y": 0,
+   "w": 1280,
+   "h": 800,
+   "title": "C. Plant detail"
+  },
+  "d-widgets.html": {
    "x": 0,
    "y": 960,
    "w": 1280,
    "h": 800,
-   "title": "C. Week grid"
+   "title": "D. Widgets"
   },
-  "checkin-flow.mmd": {
+  "watering-flow.mmd": {
    "x": 1360,
    "y": 960,
    "w": 1280,
    "h": 800,
-   "title": "Check-in flow"
+   "title": "Watering reminder"
   }
  },
  "order": [
-  "a-cards.html",
-  "b-ring.html",
-  "c-week.html",
-  "checkin-flow.mmd"
+  "a-care-list.html",
+  "b-shelf.html",
+  "c-plant-detail.html",
+  "d-widgets.html",
+  "watering-flow.mmd"
  ],
  "notes": {
   "t": {
    "x": 0,
-   "y": -240,
-   "text": "Habit tracker · home screen",
+   "y": -280,
+   "text": "Sprout · Today screen, round 2",
    "kind": "title1",
-   "maxW": 2640
+   "maxW": 4000
   },
   "sub": {
    "x": 0,
-   "y": -150,
-   "text": "Three takes on the Today screen, plus the check-in flow as a Mermaid diagram.",
+   "y": -180,
+   "text": "Two takes on the home screen, the plant page, widgets and the reminder flow. Leave notes anywhere.",
    "kind": "text",
-   "maxW": 2640
+   "maxW": 4000
+  },
+  "q": {
+   "x": 2720,
+   "y": 1000,
+   "text": "Open questions",
+   "kind": "title2",
+   "maxW": 1280
   }
  },
  "annotations": [
   {
-   "id": "demo-1",
-   "x": 820,
+   "id": "n-total",
+   "x": 860,
+   "y": 590,
+   "w": 380,
+   "text": "Love the 650 ml total. Could tapping it show which plants it covers?",
+   "to": {
+    "board": "a-care-list.html",
+    "x": 318,
+    "y": 229
+   }
+  },
+  {
+   "id": "n-shelf",
+   "x": 2220,
    "y": 600,
-   "w": 420,
-   "text": "Love the per-habit colors. Can the ring counter work for any numeric goal, not just water?"
-  },
-  {
-   "id": "demo-2",
-   "x": 2180,
-   "y": 620,
-   "w": 420,
+   "w": 390,
    "color": "blue",
-   "text": "B feels calm. Maybe use it as the widget and keep A for the app itself?"
+   "text": "B is my favourite. But due plants have to stay on top: maybe a “Today” row above the rooms?",
+   "to": {
+    "board": "b-shelf.html",
+    "x": 360,
+    "y": 249
+   }
   },
   {
-   "id": "demo-3",
+   "id": "n-chart",
+   "x": 3590,
+   "y": 600,
+   "w": 380,
+   "color": "pink",
+   "text": "Label the dashed line (“droops below 20%”), otherwise nobody will get it.",
+   "to": {
+    "board": "c-plant-detail.html",
+    "x": 330,
+    "y": 627
+   }
+  },
+  {
+   "id": "n-widget",
    "x": 820,
    "y": 1580,
-   "w": 420,
+   "w": 400,
    "color": "green",
-   "text": "C as a second tab next to Today: yes."
+   "text": "Ship the small widget first. The medium one can wait for 1.1.",
+   "to": {
+    "board": "d-widgets.html",
+    "x": 290,
+    "y": 210
+   }
+  },
+  {
+   "id": "n-snooze",
+   "x": 2200,
+   "y": 1560,
+   "w": 400,
+   "text": "Cap snoozes at two days, otherwise plants die quietly.",
+   "to": {
+    "board": "watering-flow.mmd",
+    "node": "snooze",
+    "label": "Snoozed?",
+    "fx": 0.92,
+    "fy": 0.5
+   }
+  },
+  {
+   "id": "n-dark",
+   "x": 2730,
+   "y": 1140,
+   "w": 420,
+   "color": "gray",
+   "text": "Round 3: dark mode for A and B, plus an empty state for a brand-new account with no plants."
+  },
+  {
+   "id": "n-name",
+   "x": 3220,
+   "y": 1180,
+   "w": 380,
+   "color": "blue",
+   "text": "Do we keep plant nicknames (Monty, Figgy) on the widgets, or show the species?"
+  },
+  {
+   "id": "n-onb",
+   "x": 2780,
+   "y": 1420,
+   "w": 400,
+   "color": "green",
+   "text": "Onboarding: scan the pot label instead of typing the species?"
   }
  ],
  "designSystems": []

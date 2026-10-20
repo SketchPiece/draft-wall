@@ -1,0 +1,50 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>C. Plant detail</title><link rel="stylesheet" href="_shared.css">
+<style>
+.hero { background: linear-gradient(180deg, #cfe3cc 0%, #e4efdf 100%); margin-top: -46px; padding-top: 46px; position: relative; height: 300px; }
+.nav { display: flex; justify-content: space-between; padding: 4px 16px; }
+.nav b { width: 34px; height: 34px; border-radius: 12px; background: rgba(255,255,255,.7); display: grid; place-items: center; font: 600 16px var(--sans); color: var(--ink); }
+.hero svg.plant { position: absolute; left: 50%; bottom: -14px; width: 190px; height: 232px; margin-left: -95px; }
+.body { padding: 14px 20px 0; }
+.body h1 { margin: 0; font: 600 28px/1.1 var(--serif); }
+.body .sp { font: italic 13px var(--serif); color: var(--ink-3); }
+.stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0; }
+.stats div { border: 1px solid var(--line); border-radius: 14px; padding: 8px 10px; background: #fff; }
+.stats small { display: block; font: 600 10px var(--sans); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+.stats b { font: 600 13px var(--sans); }
+.chart { border: 1px solid var(--line); border-radius: 16px; padding: 10px 12px 8px; background: #fff; }
+.chart header { display: flex; justify-content: space-between; font: 600 12px var(--sans); }
+.chart header span { color: var(--ink-3); font-weight: 500; }
+.chart svg { display: block; width: 100%; height: 70px; margin-top: 6px; }
+.btn { margin: 14px 20px 0; height: 48px; border-radius: 16px; background: var(--leaf); color: #fff; display: flex; align-items: center; justify-content: center; gap: 8px; font: 600 15px var(--sans); }
+.phone .status { position: relative; z-index: 2; }
+</style></head><body>
+<div class="cap"><b>C</b>Plant detail</div>
+<div class="stage">
+  <div class="phone">
+    <div class="status"><span>9:41</span><i></i></div>
+    <div class="scroll">
+      <div class="hero"><div class="nav"><b>‹</b><b>⋯</b></div><i data-plant="monstera"></i></div>
+      <div class="body">
+        <h1>Monty</h1><div class="sp">Monstera deliciosa · living room, by the window</div>
+        <div class="stats"><div><small>Light</small><b>Bright, indirect</b></div><div><small>Water</small><b>Every 7 days</b></div><div><small>Humidity</small><b>60%</b></div></div>
+        <div class="chart"><header>Soil moisture<span>last 14 days</span></header>
+          <svg viewBox="0 0 260 70" preserveAspectRatio="none">
+            <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b7dd8" stop-opacity=".28"/><stop offset="1" stop-color="#3b7dd8" stop-opacity="0"/></linearGradient></defs>
+            <path d="M0 14 L20 20 L40 27 L60 34 L80 41 L100 48 L120 54 L130 12 L150 19 L170 27 L190 35 L210 43 L230 51 L250 58 L260 60 V70 H0Z" fill="url(#g)"/>
+            <path d="M0 14 L20 20 L40 27 L60 34 L80 41 L100 48 L120 54 L130 12 L150 19 L170 27 L190 35 L210 43 L230 51 L250 58 L260 60" fill="none" stroke="#3b7dd8" stroke-width="2.2" stroke-linejoin="round"/>
+            <line x1="0" y1="52" x2="260" y2="52" stroke="#c8714b" stroke-dasharray="4 4" stroke-width="1"/>
+            <circle cx="260" cy="60" r="4" fill="#3b7dd8" stroke="#fff" stroke-width="2"/>
+          </svg></div>
+      </div>
+      <div class="btn"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 1.5S3.5 6.6 3.5 9.6a4.5 4.5 0 0 0 9 0C12.5 6.6 8 1.5 8 1.5Z"/></svg>Water Monty · 300 ml</div>
+    </div>
+  </div>
+  <div class="side">
+    <span class="tag">Shared screen</span>
+    <h2>One plant, everything about it</h2>
+    <p>Opens from either home screen. The moisture line drops between waterings; the dashed line is where Monty starts to droop.</p>
+    <ul class="pros"><li>Care facts in three tiles, no scrolling</li><li><span>The chart explains <i>why</i> today is a watering day</span></li></ul>
+  </div>
+</div>
+<script src="_sprout.js"></script>
+</body></html>

@@ -1,0 +1,14 @@
+---
+title: Watering reminder
+---
+flowchart TD
+  check([Morning check<br>8:00]) --> due{Any plant<br>due today?}
+  due -->|no| quiet[Stay quiet]
+  due -->|yes| push[Push<br>3 plants are thirsty]:::hl
+  push --> open{Opened<br>within 2 h?}
+  open -->|yes| list[Today list]
+  open -->|no| nudge[One evening<br>nudge]
+  nudge --> snooze{Snoozed?}
+  snooze -->|yes| later[Move to<br>tomorrow]
+  snooze -->|no| list
+  list --> log[(Log watering<br>update soil estimate)]

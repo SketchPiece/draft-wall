@@ -13,7 +13,7 @@
 //   canvas creators [add|rm <email|@domain>]                     (admins) who may create canvases
 //   canvas config --url <https://…>      hosted canvas; --as <email> picks the account for one command
 import http from 'node:http';
-import { execFile, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
@@ -364,12 +364,55 @@ function findChrome() {
     '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'];
   return list.find(p => p && fs.existsSync(p));
 }
-function screenshot(chrome, file, w, h, out) {
-  return new Promise(resolve => {
-    const args = ['--headless=new', '--hide-scrollbars', '--mute-audio', `--window-size=${w},${h}`, '--force-device-scale-factor=0.5',
-      '--virtual-time-budget=4000', `--screenshot=${out}`, 'file://' + file];
-    execFile(chrome, args, { timeout: 30_000 }, () => resolve(fs.existsSync(out)));
-  });
+// Driven over the DevTools protocol: --window-size can't go below 500px wide, so a phone board would be laid out wider
+// and cropped. The viewport is set to the board's exact size instead.
+async function screenshot(chrome, file, w, h, out) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'canvas-chrome-'));
+  const proc = spawn(chrome, ['--headless=new', '--hide-scrollbars', '--mute-audio', '--no-first-run', '--no-default-browser-check',
+    '--remote-debugging-port=0', `--user-data-dir=${dir}`, 'about:blank'], { stdio: 'ignore' });
+  const deadline = Date.now() + 30_000, wait = ms => new Promise(r => setTimeout(r, ms));
+  let ws;
+  try {
+    let port;
+    while (!(port = fs.existsSync(path.join(dir, 'DevToolsActivePort')) && fs.readFileSync(path.join(dir, 'DevToolsActivePort'), 'utf8').split('\n')[0])) {
+      if (Date.now() > deadline || proc.exitCode !== null) return false;
+      await wait(50);
+    }
+    const page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find(t => t.type === 'page');
+    ws = new WebSocket(page.webSocketDebuggerUrl);
+    await new Promise((resolve, reject) => { ws.onopen = resolve; ws.onerror = reject; });
+    let seq = 0;
+    const pending = new Map(), events = new Map();
+    ws.onmessage = e => {
+      const m = JSON.parse(e.data);
+      if (m.id) { pending.get(m.id)?.(m); pending.delete(m.id); } else events.get(m.method)?.(m.params);
+    };
+    const send = (method, params = {}) => new Promise((resolve, reject) => {
+      const id = ++seq;
+      pending.set(id, m => m.error ? reject(new Error(m.error.message)) : resolve(m.result));
+      ws.send(JSON.stringify({ id, method, params }));
+    });
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), deadline - Date.now()));
+    await Promise.race([timeout, (async () => {
+      await send('Page.enable');
+      await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 0.5, mobile: false });
+      const loaded = new Promise(r => events.set('Page.loadEventFired', r));
+      await send('Page.navigate', { url: 'file://' + file });
+      await loaded;
+      // Web fonts and entrance animations settle before the picture is taken.
+      await send('Runtime.evaluate', { expression: 'document.fonts.ready.then(() => new Promise(r => setTimeout(r, 1500)))', awaitPromise: true });
+      const { data } = await send('Page.captureScreenshot', { format: 'png' });
+      fs.writeFileSync(out, Buffer.from(data, 'base64'));
+    })()]);
+    return true;
+  } catch {
+    return false;
+  } finally {
+    ws?.close();
+    proc.kill();
+    await new Promise(r => proc.exitCode !== null ? r() : proc.once('exit', r));
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 // Adds a preview of every HTML board to the manifest; returns the ones the server doesn't have yet, taking missing ones.
@@ -380,7 +423,7 @@ async function addThumbs(root, doc, files, remoteFiles = {}) {
   const assets = createHash('sha256').update(Object.entries(files).filter(([p]) => !doc.boards[p]).sort().join()).digest('hex');
   const todo = [];
   for (const f of boards) {
-    const b = doc.boards[f], key = createHash('sha256').update(`${files[f]}:${assets}:${b.w}x${b.h}:half`).digest('hex').slice(0, 16);
+    const b = doc.boards[f], key = createHash('sha256').update(`${files[f]}:${assets}:${b.w}x${b.h}:half-exact`).digest('hex').slice(0, 16);
     const cached = path.join(THUMBS, key + '.png');
     if (remoteFiles[thumbPath(f)] === key || fs.existsSync(cached)) files[thumbPath(f)] = key;
     else todo.push({ f, b, key, cached });

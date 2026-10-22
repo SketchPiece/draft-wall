@@ -20,7 +20,10 @@ export const validPath = path =>
   path.length > 0 && path.length <= 200 && path.split('/').every(s => /^[\w\-. ()@+]+$/.test(s) && !s.startsWith('.'));
 
 // Boards run sandboxed; this lets Esc inside a board close the full-size view.
-const BRIDGE = `<script>addEventListener('keydown',e=>{if(e.key==='Escape')parent.postMessage('canvas:escape','*')})</script>`;
+// Opened in its own tab, a board taller than the window has to scroll even if its CSS hides overflow
+// (boards often set overflow:hidden, which is harmless in the canvas where the frame is the board's full size).
+const BRIDGE = `<script>addEventListener('keydown',e=>{if(e.key==='Escape')parent.postMessage('canvas:escape','*')});`
+  + `if(top===self){const s=document.createElement('style');s.textContent='html{overflow:auto!important}body{overflow:visible!important}';document.head.append(s)}</script>`;
 
 /** @param {string} html */
 export const injectBridge = html => /<\/body>/i.test(html) ? html.replace(/<\/body>(?![\s\S]*<\/body>)/i, BRIDGE + '</body>') : html + BRIDGE;
